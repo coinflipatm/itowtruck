@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="iTow auction listing for one vehicle available on June 8, 2026.">
+<title>Auction | iTow</title>
+<link rel="icon" type="image/png" href="/assets/logos/itow-logo.png">
+<link rel="shortcut icon" href="/assets/logos/itow-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+@font-face {
+  font-family: 'SF Sports Night';
+  src: url('/font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --bg: #050505; --bg2: #0c0c0c; --card: #111; --card2: #161616;
+  --border: #1e1e1e; --border2: #333;
+  --white: #fff; --g1: #b0b0b0; --g2: #666; --g3: #444;
+  --dim: rgba(255,255,255,0.08);
+  --brand: 'SF Sports Night', sans-serif;
+  --body: 'Barlow', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--body);background:var(--bg);color:var(--g1);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
+
+.nav{position:sticky;top:0;z-index:100;background:rgba(5,5,5,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 1.5rem;height:60px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{display:flex;align-items:center;gap:10px}
+.nav-logo img{height:24px;filter:invert(1)}
+.nav-link{font-family:var(--brand);font-size:0.85rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--g2);transition:color 0.3s}
+.nav-link:hover{color:var(--white)}
+.nav-call{background:#fff;color:#000;padding:8px 20px;font-family:var(--brand);font-size:0.85rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:background 0.3s}
+.nav-call:hover{background:#ddd}
+
+.hero{flex:1;display:flex;align-items:center;padding:80px 1.5rem 56px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 20%,rgba(255,255,255,0.03) 0%,transparent 72%)}
+.wrap{max-width:1100px;margin:0 auto;width:100%;position:relative;z-index:1}
+.eyebrow{font-family:var(--brand);font-size:0.82rem;letter-spacing:0.24em;text-transform:uppercase;color:var(--g2);margin-bottom:1.2rem}
+.eyebrow span{color:var(--g1)}
+.title{font-family:var(--brand);font-size:clamp(3rem,8vw,6.5rem);line-height:0.92;color:var(--white);text-transform:uppercase;letter-spacing:-0.02em;max-width:10ch;margin-bottom:1rem}
+.subtitle{font-size:1.06rem;color:var(--g1);max-width:700px;line-height:1.7;margin-bottom:2rem}
+.cta-row{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:2.5rem}
+.cta{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#000;padding:14px 28px;font-family:var(--brand);font-size:0.95rem;letter-spacing:0.08em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.3s}
+.cta:hover{background:#ddd;transform:translateY(-1px)}
+.cta.secondary{background:transparent;color:var(--white);border:1px solid var(--border2)}
+.cta.secondary:hover{background:var(--card2)}
+
+.grid{display:grid;grid-template-columns:1.15fr 0.85fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-top:2rem}
+.panel{background:var(--card);padding:1.75rem}
+.panel:hover{background:var(--card2)}
+.panel-label{font-family:var(--brand);font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--g3);margin-bottom:0.85rem}
+.vehicle{display:flex;flex-direction:column;gap:1rem}
+.vehicle-name{font-family:var(--brand);font-size:clamp(1.7rem,3vw,3rem);line-height:1.02;color:var(--white);text-transform:uppercase}
+.vin{font-size:0.9rem;color:var(--g2);letter-spacing:0.12em;text-transform:uppercase;word-break:break-word}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);margin-top:1.5rem}
+.detail{background:#0b0b0b;padding:1rem 1rem 1.05rem}
+.detail .k{font-size:0.65rem;color:var(--g3);letter-spacing:0.16em;text-transform:uppercase;margin-bottom:0.35rem}
+.detail .v{font-family:var(--brand);font-size:0.98rem;color:var(--white);text-transform:uppercase;line-height:1.3}
+
+.list{display:flex;flex-direction:column;gap:1rem}
+.list-item{padding:1rem 0;border-top:1px solid var(--border)}
+.list-item:first-child{border-top:none;padding-top:0}
+.list-item .k{font-family:var(--brand);font-size:0.72rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--g3);margin-bottom:0.45rem}
+.list-item .v{font-size:0.95rem;color:var(--g1);line-height:1.65}
+
+.notice{margin-top:1.5rem;padding:1rem 1.1rem;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.9rem;color:var(--g2);line-height:1.65}
+.notice strong{color:var(--white)}
+
+.footer{border-top:1px solid var(--border);padding:24px 1.5rem;font-size:0.72rem;color:var(--g3);text-align:center;letter-spacing:0.04em;background:#000}
+.footer a{color:var(--g2)}
+.footer a:hover{color:var(--white)}
+
+@media(max-width:900px){
+  .hero{padding:72px 1.25rem 42px}
+  .grid{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .nav{padding:0 1rem;height:56px}
+  .nav-logo img{height:20px}
+  .nav-link{font-size:0.74rem;letter-spacing:0.1em}
+  .nav-call{padding:7px 14px;font-size:0.74rem}
+  .hero{padding:64px 1rem 34px}
+  .eyebrow{font-size:0.7rem;letter-spacing:0.18em;margin-bottom:1rem}
+  .title{font-size:clamp(2.5rem,14vw,3.6rem)}
+  .subtitle{font-size:0.98rem;margin-bottom:1.5rem}
+  .cta{width:100%;justify-content:center}
+  .detail-grid{grid-template-columns:1fr}
+  .panel{padding:1.4rem}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo"><img src="/assets/logos/itow-logo.svg" alt="iTow"></a>
+  <a href="/" class="nav-link">Back Home</a>
+  <a href="tel:8103945937" class="nav-call">&#9742; Call</a>
+</nav>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Auction listing &bull; June 8, 2026 &bull; <span>itowtruck.com/auction</span></div>
+    <h1 class="title">Vehicle Auction</h1>
+    <p class="subtitle">One vehicle is scheduled for auction on 6/8/26. Review the listing details below for the unit information.</p>
+
+    <div class="cta-row">
+      <a href="tel:8103945937" class="cta">&#9742; Call for Info</a>
+      <a href="mailto:info@itowtruck.com" class="cta secondary">Email Request</a>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="panel-label">Vehicle</div>
+        <div class="vehicle">
+          <div class="vehicle-name">2016 Chevrolet Equinox</div>
+          <div class="vin">VIN 2GNFLGEKXG6263903</div>
+          <div class="detail-grid">
+            <div class="detail">
+              <div class="k">Auction date</div>
+              <div class="v">June 8, 2026</div>
+            </div>
+            <div class="detail">
+              <div class="k">Vehicle count</div>
+              <div class="v">1 vehicle</div>
+            </div>
+            <div class="detail">
+              <div class="k">Year / Make / Model</div>
+              <div class="v">2016 Chevrolet Equinox</div>
+            </div>
+            <div class="detail">
+              <div class="k">Listing ID</div>
+              <div class="v">2GNFLGEKXG6263903</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">Auction notes</div>
+        <div class="list">
+          <div class="list-item">
+            <div class="k">Status</div>
+            <div class="v">Available for auction on the scheduled date.</div>
+          </div>
+          <div class="list-item">
+            <div class="k">Inspection / pickup</div>
+            <div class="v">Contact iTow directly for any inspection or pickup questions.</div>
+          </div>
+          <div class="list-item">
+            <div class="k">Contact</div>
+            <div class="v"><a href="mailto:info@itowtruck.com">info@itowtruck.com</a> or <a href="tel:8103945937">(810) 394-5937</a></div>
+          </div>
+        </div>
+        <div class="notice"><strong>Note:</strong> This page lists the single vehicle provided for the 6/8/26 auction. If you want, I can also add a photo, reserve price, pickup instructions, or a downloadable notice.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  iTow &bull; <a href="/">itowtruck.com</a> &bull; <a href="tel:8103945937">(810) 394-5937</a>
+</footer>
+
+</body>
+</html>
