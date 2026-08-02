@@ -18,7 +18,7 @@
   header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.3px}
   header .sub{font-size:11px;opacity:.75;margin-top:2px}
   .tabs{display:flex;margin-top:12px}
-  .tab{flex:1;text-align:center;padding:11px 0;font-size:14px;font-weight:600;
+  .tab{flex:1;text-align:center;padding:11px 0;font-size:13px;font-weight:600;
        color:#c9d4e8;border-bottom:3px solid transparent;cursor:pointer;user-select:none}
   .tab.on{color:#fff;border-bottom-color:#fff}
   main{padding:14px 12px;max-width:640px;margin:0 auto}
@@ -79,6 +79,27 @@
             border-radius:50%;animation:r 0.8s linear infinite}
   @keyframes r{to{transform:rotate(360deg)}}
   .empty{color:var(--mut);font-size:14px;text-align:center;padding:22px 0}
+  /* shifts */
+  .wknav{display:flex;align-items:center;justify-content:space-between;margin:2px 0 10px}
+  .wknav span{font-weight:700;font-size:15px}
+  .wkbtn{border:1.5px solid var(--line);background:var(--card);border-radius:10px;
+         font-size:20px;padding:5px 18px;color:var(--navy);font-weight:700;cursor:pointer}
+  .wkbtn:disabled{opacity:.35}
+  .shift .hrs{font-weight:700}
+  .tag{display:inline-block;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:700;margin-left:6px}
+  .tag.open{background:#fff3e0;color:var(--amber)}
+  .tag.zero{background:#fdecea;color:var(--red)}
+  /* settings */
+  .knob{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:9px}
+  .knob .kdesc{font-size:14px;font-weight:600}
+  .knob .kkey{font-size:11px;color:var(--mut);margin:2px 0 10px;font-family:ui-monospace,SFMono-Regular,monospace}
+  .krow{display:flex;gap:8px;align-items:center}
+  .krow input{flex:1}
+  .kbtn{flex:0 0 auto;padding:12px 16px;border:0;border-radius:10px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer}
+  .switch{width:56px;height:32px;border-radius:99px;background:#ccd4e2;position:relative;cursor:pointer;flex:0 0 auto;transition:background .15s}
+  .switch.on{background:var(--green)}
+  .switch::after{content:'';position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:left .15s}
+  .switch.on::after{left:27px}
 </style>
 </head>
 <body>
@@ -88,6 +109,8 @@
   <div class="tabs">
     <div class="tab on" id="tabR" onclick="showTab('roster')">Roster</div>
     <div class="tab" id="tabS" onclick="showTab('sched')">Schedule</div>
+    <div class="tab" id="tabH" onclick="showTab('shifts')">Shifts</div>
+    <div class="tab" id="tabC" onclick="showTab('settings')">Settings</div>
   </div>
 </header>
 
@@ -100,6 +123,19 @@
     <button class="btn" onclick="openExc()">+ Time off / exception</button>
     <div class="secthead">Upcoming exceptions</div>
     <div id="excList"></div>
+  </div>
+  <div id="vShifts" style="display:none">
+    <div class="wknav">
+      <button class="wkbtn" onclick="wkNav(-1)">&#8249;</button>
+      <span id="wkLabel"></span>
+      <button class="wkbtn" id="wkFwd" onclick="wkNav(1)">&#8250;</button>
+    </div>
+    <div class="picker" id="pickerH"></div>
+    <div id="shiftList"></div>
+  </div>
+  <div id="vSettings" style="display:none">
+    <div class="secthead">System settings &mdash; changes take effect immediately</div>
+    <div id="cfgList"></div>
   </div>
 </main>
 
@@ -154,6 +190,21 @@
   </div>
   <label>Reason (optional)</label><input id="excReason" placeholder="e.g. vacation, back Mon 8/10">
   <button class="btn" onclick="fileExc()">File it</button>
+  <button class="btn sec" onclick="closeSheets()">Cancel</button>
+</div>
+
+<!-- shift editor -->
+<div class="sheet" id="shShift">
+  <h3 id="sTitle"></h3>
+  <div class="meta" id="sMeta" style="margin-bottom:2px"></div>
+  <div class="two">
+    <div><label>Clock in</label><input type="time" id="sIn"></div>
+    <div><label>Clock out</label><input type="time" id="sOut"></div>
+  </div>
+  <label>Reason (goes in the audit trail)</label><input id="sReason" placeholder="e.g. forgot to punch out">
+  <button class="btn" onclick="saveShift()">Save times</button>
+  <button class="btn sec" id="sReopenBtn" onclick="reopenShift()">Reopen (clear clock-out)</button>
+  <button class="btn danger" onclick="deleteShift()">Delete shift</button>
   <button class="btn sec" onclick="closeSheets()">Cancel</button>
 </div>
 
@@ -293,9 +344,14 @@ function api(fn, args, onOk){
 }
 
 var B = null;            // boot payload
+var SH = null;           // shifts payload (per week)
+var CFG = null;          // settings payload
+var wkOff = 0;           // 0 = current pay week, -1 = last, ...
 var selDriver = null;    // schedule tab selection
+var selShiftDriver = null;
 var editDriver = null;   // roster editor target
 var editDay = null;
+var editShift = null;
 var DAYS = ['FRI','SAT','SUN','MON','TUE','WED','THU'];
 var DAYNAMES = {FRI:'Fri',SAT:'Sat',SUN:'Sun',MON:'Mon',TUE:'Tue',WED:'Wed',THU:'Thu'};
 
@@ -315,7 +371,7 @@ function boot(){
   });
 }
 function paint(){
-  $('me').textContent = B.me + (B.t ? ' · server '+(B.t.verify+B.t.sheets)+'ms' : '');
+  $('me').textContent = B.me + (B.t ? ' · '+B.t.verify+'+'+B.t.sheets+'ms'+(B.t.cached?' \u26a1':'') : '');
   if(!selDriver){
     var firstActive=B.roster.filter(function(d){return /^active$/i.test(d.status)&&d.role==='Driver'})[0];
     selDriver=firstActive?firstActive.id:(B.roster[0]&&B.roster[0].id);
@@ -329,10 +385,134 @@ function fmtT(t){ if(!t)return''; var p=t.split(':'),h=+p[0],m=p[1];
 function fmtTruck(u){return u?String(u).replace(/^truck_/,''):''}
 
 function showTab(t){
-  $('tabR').className='tab'+(t==='roster'?' on':'');
-  $('tabS').className='tab'+(t==='sched'?' on':'');
+  var tabs={roster:'tabR',sched:'tabS',shifts:'tabH',settings:'tabC'};
+  Object.keys(tabs).forEach(function(x){$(tabs[x]).className='tab'+(x===t?' on':'')});
   $('vRoster').style.display=t==='roster'?'':'none';
   $('vSched').style.display=t==='sched'?'':'none';
+  $('vShifts').style.display=t==='shifts'?'':'none';
+  $('vSettings').style.display=t==='settings'?'':'none';
+  if(t==='shifts'&&!SH)loadShifts();
+  if(t==='settings'&&!CFG)loadCfg();
+}
+
+/* ============ SHIFTS ============ */
+function loadShifts(){
+  api('dashShifts',[wkOff,KEYV()],function(s){
+    SH=s;
+    if(!selShiftDriver)selShiftDriver=selDriver;
+    renderShifts();
+  });
+}
+function wkNav(d){
+  if(wkOff+d>0)return;
+  wkOff+=d; SH=null; loadShifts();
+}
+function renderShifts(){
+  $('wkLabel').textContent=(wkOff===0?'This week \u00b7 ':wkOff===-1?'Last week \u00b7 ':'')+SH.label;
+  $('wkFwd').disabled=(wkOff===0);
+  var p=$('pickerH'); p.innerHTML='';
+  var listed=B.roster.filter(function(d){return /^active$/i.test(d.status)});
+  listed.forEach(function(d){
+    var c=document.createElement('div');
+    c.className='pchip'+(d.id===selShiftDriver?' on':'');
+    var tot=SH.totals[d.id];
+    c.textContent=dispName(d)+(tot?' \u00b7 '+tot+'h':'');
+    c.onclick=function(){selShiftDriver=d.id;renderShifts()};
+    p.appendChild(c);
+  });
+  var v=$('shiftList'); v.innerHTML='';
+  var rows=SH.shifts.filter(function(s){return s.driverId===selShiftDriver});
+  if(!rows.length){v.innerHTML='<div class="empty">No shifts recorded this week.</div>';return}
+  rows.forEach(function(s){
+    var el=document.createElement('div'); el.className='card shift';
+    var dd=s.date.slice(5).replace('-','/');
+    var dayNice=s.day.charAt(0)+s.day.slice(1).toLowerCase();
+    var times=(s.inT?fmtT(s.inT):'\u2014')+' \u2013 '+(s.outT?fmtT(s.outT)+(s.outNextDay?' +1d':''):'\u2026');
+    var tags='';
+    if(s.status==='OPEN')tags+='<span class="tag open">OPEN</span>';
+    if(s.status==='CLOSED'&&(!s.hours))tags+='<span class="tag zero">0.0h</span>';
+    el.innerHTML='<div class="rowline"><span class="nm" style="font-size:15px">'+dayNice+' '+dd+tags+'</span>'+
+      '<span class="hrs">'+(s.status==='CLOSED'&&s.hours?s.hours+'h':'')+'</span></div>'+
+      '<div class="meta">'+times+(s.unit?' \u00b7 truck '+fmtTruck(s.unit):'')+'</div>'+
+      (s.notes?'<div class="meta">'+esc(s.notes)+'</div>':'');
+    el.onclick=function(){openShift(s)};
+    v.appendChild(el);
+  });
+  var t=document.createElement('div'); t.className='secthead';
+  t.textContent='Week total: '+(SH.totals[selShiftDriver]||0)+'h';
+  v.appendChild(t);
+}
+function openShift(s){
+  editShift=s;
+  var d=B.roster.filter(function(x){return x.id===s.driverId})[0];
+  var dayNice=s.day.charAt(0)+s.day.slice(1).toLowerCase();
+  $('sTitle').textContent=(d?dispName(d):s.driverId)+' \u2014 '+dayNice+' '+s.date.slice(5).replace('-','/');
+  $('sMeta').textContent=s.id+' \u00b7 '+s.status+(s.outNextDay?' \u00b7 clock-out lands next day':'');
+  $('sIn').value=s.inT||''; $('sOut').value=s.outT||''; $('sReason').value='';
+  $('sReopenBtn').style.display=s.status==='CLOSED'?'':'none';
+  openSheet('shShift');
+}
+function saveShift(){
+  var s=editShift, inV=$('sIn').value, outV=$('sOut').value, why=$('sReason').value.trim();
+  var jobs=[];
+  if(inV&&inV!==s.inT)jobs.push(['clock_in',inV]);
+  if(outV&&outV!==s.outT)jobs.push(['clock_out',outV]);
+  if(!jobs.length){toast('No time changes');return}
+  var run=function(i){
+    if(i>=jobs.length){toast('Saved');closeSheets();SH=null;loadShifts();return}
+    api('dashFixShiftTime',[s.id,jobs[i][0],jobs[i][1],why,KEYV()],function(){run(i+1)});
+  };
+  run(0);
+}
+function reopenShift(){
+  var s=editShift;
+  if(!confirm('Reopen this shift? Clock-out and hours will be cleared. Record only \u2014 it does not put them back on the live clock.'))return;
+  api('dashReopenShift',[s.id,KEYV()],function(){toast('Reopened');closeSheets();SH=null;loadShifts()});
+}
+function deleteShift(){
+  var s=editShift;
+  if(!confirm('DELETE this shift'+(s.hours?' ('+s.hours+'h)':'')+' on '+s.date+'? The full row is preserved in Bot_Log, but it disappears from payroll.'))return;
+  api('dashDeleteShift',[s.id,KEYV()],function(){toast('Deleted');closeSheets();SH=null;loadShifts()});
+}
+
+/* ============ SETTINGS ============ */
+function loadCfg(){
+  api('dashConfigList',[KEYV()],function(c){CFG=c;renderSettings()});
+}
+function renderSettings(){
+  var v=$('cfgList'); v.innerHTML='';
+  if(!CFG.knobs.length){v.innerHTML='<div class="empty">No editable settings found.</div>';return}
+  CFG.knobs.forEach(function(kn){
+    var el=document.createElement('div'); el.className='knob';
+    el.innerHTML='<div class="kdesc">'+esc(kn.desc||kn.key)+'</div><div class="kkey">'+esc(kn.key)+'</div>';
+    var row=document.createElement('div'); row.className='krow';
+    var isBool=/^(true|false)$/i.test(kn.value.trim());
+    if(isBool){
+      var on=/^true$/i.test(kn.value.trim());
+      var sw=document.createElement('div'); sw.className='switch'+(on?' on':'');
+      sw.onclick=function(){
+        var next=on?'FALSE':'TRUE';
+        if(!confirm('Set '+kn.key+' to '+next+'? This changes live system behavior.'))return;
+        api('dashSetConfig',[kn.key,next,KEYV()],function(){toast(kn.key+' = '+next);CFG=null;loadCfg()});
+      };
+      var lbl=document.createElement('span');
+      lbl.style.fontWeight='700'; lbl.style.color=on?'var(--green)':'var(--mut)';
+      lbl.textContent=on?'ON':'OFF';
+      row.appendChild(sw); row.appendChild(lbl);
+    } else {
+      var inp=document.createElement('input'); inp.value=kn.value;
+      var btn=document.createElement('button'); btn.className='kbtn'; btn.textContent='Save';
+      btn.onclick=function(){
+        var nv=inp.value.trim();
+        if(nv===kn.value){toast('No change');return}
+        if(!confirm('Set '+kn.key+' to "'+nv+'"?'))return;
+        api('dashSetConfig',[kn.key,nv,KEYV()],function(r){toast(r.changed?'Saved':'No change');CFG=null;loadCfg()});
+      };
+      row.appendChild(inp); row.appendChild(btn);
+    }
+    el.appendChild(row);
+    v.appendChild(el);
+  });
 }
 
 /* ============ ROSTER ============ */
@@ -489,7 +669,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function openSheet(id){$('ov').className='ov show';$(id).className='sheet show'}
 function closeSheets(){$('ov').className='ov';
-  ['shDriver','shDay','shExc'].forEach(function(i){$(i).className='sheet'})}
+  ['shDriver','shDay','shExc','shShift'].forEach(function(i){$(i).className='sheet'})}
 
 initAuth();
 </script>
