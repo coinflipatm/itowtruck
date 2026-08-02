@@ -264,15 +264,25 @@ function api(fn, args, onOk){
       if (/Not authorized/i.test(e.message)) {
         var badCred = CRED;
         try { sessionStorage.removeItem('towos_cred') } catch(x){}
-        CRED = null; showLogin('Sign-in rejected — running diagnostic…');
-        // Ask the server exactly why, and print it on the login card.
+        CRED = null; showLogin('Checking…');
+        // Ask the server why. Healthy config + unknown account gets a
+        // plain denial; the raw diagnostic only shows when something is
+        // actually misconfigured (that's the only time it's useful).
         fetch(API_URL + '?api=1&fn=dashDiag&args=' +
               encodeURIComponent(JSON.stringify(['tok:' + badCred])))
           .then(function(r){ return r.json() })
           .then(function(j){
-            document.getElementById('loginMsg').style.textAlign = 'left';
-            document.getElementById('loginMsg').textContent =
-              JSON.stringify(j.data || j, null, 1);
+            var d = j.data || j || {};
+            var msg = document.getElementById('loginMsg');
+            if (d.client_id_set && d.aud_matches_config &&
+                d.tokeninfo_status === 200 && d.email_allowlisted === false) {
+              msg.style.textAlign = 'center';
+              msg.textContent = (d.token_email || 'This account') +
+                ' doesn\u2019t have access to this dashboard.';
+            } else {
+              msg.style.textAlign = 'left';
+              msg.textContent = JSON.stringify(d, null, 1);
+            }
           })
           .catch(function(){
             document.getElementById('loginMsg').textContent =
@@ -399,7 +409,7 @@ function renderSched(){
     w.appendChild(el);
   });
   var ex=$('excList'); ex.innerHTML='';
-  var upcoming=B.exceptions;
+  var upcoming=B.exceptions.filter(function(e){return e.driverId===selDriver});
   if(!upcoming.length){ex.innerHTML='<div class="empty">Nothing filed.</div>'}
   upcoming.forEach(function(e){
     var el=document.createElement('div'); el.className='exline';
