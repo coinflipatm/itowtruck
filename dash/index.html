@@ -172,7 +172,7 @@
 <script>
 /* ====== CONFIG — fill these two lines, then commit ====== */
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";   // ends in /exec
-var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";          // ends in .apps.googleusercontent.com
+var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";  
 /* ======================================================== */
 
 var CRED = null;         // Google ID token for this session
@@ -219,8 +219,22 @@ function api(fn, args, onOk){
     .catch(function(e){
       spin(false);
       if (/Not authorized/i.test(e.message)) {
+        var badCred = CRED;
         try { localStorage.removeItem('towos_cred') } catch(x){}
-        CRED = null; showLogin('Session expired — sign in again.');
+        CRED = null; showLogin('Sign-in rejected — running diagnostic…');
+        // Ask the server exactly why, and print it on the login card.
+        fetch(API_URL + '?api=1&fn=dashDiag&args=' +
+              encodeURIComponent(JSON.stringify(['tok:' + badCred])))
+          .then(function(r){ return r.json() })
+          .then(function(j){
+            document.getElementById('loginMsg').style.textAlign = 'left';
+            document.getElementById('loginMsg').textContent =
+              JSON.stringify(j.data || j, null, 1);
+          })
+          .catch(function(){
+            document.getElementById('loginMsg').textContent =
+              'Sign-in rejected and diagnostic unreachable — check deployment version.';
+          });
       } else { fail(e); }
     });
 }
