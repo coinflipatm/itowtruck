@@ -172,7 +172,8 @@
 <script>
 /* ====== CONFIG — fill these two lines, then commit ====== */
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";   // ends in /exec
-var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";  
+var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
+
 /* ======================================================== */
 
 var CRED = null;         // Google ID token for this session
@@ -190,28 +191,27 @@ function hideLogin(){ document.getElementById('loginOv').style.display = 'none' 
 
 function onCred(resp){
   CRED = resp.credential;
-  try { localStorage.setItem('towos_cred', CRED) } catch(e){}
+  try { sessionStorage.setItem('towos_cred', CRED) } catch(e){}
   // Login overlay stays up until the server ACCEPTS the account —
   // unauthorized users never see the app shell.
   showLogin('Checking access…'); boot();
 }
 function initAuth(){
   if (!window.google || !google.accounts) { setTimeout(initAuth, 150); return }
-  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCred, auto_select: true });
+  // auto_select:false + sessionStorage = a fresh open ALWAYS requires a
+  // tap on the Google button. Reloads within the same open session skip it.
+  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCred, auto_select: false });
   google.accounts.id.renderButton(document.getElementById('gbtn'),
     { theme:'filled_blue', size:'large', shape:'pill', width:260 });
   var saved = null;
-  try { saved = localStorage.getItem('towos_cred') } catch(e){}
+  try { saved = sessionStorage.getItem('towos_cred') } catch(e){}
   if (saved && jwtExpMs(saved) > Date.now() + 60000) {
     CRED = saved;
-    // Paint instantly from the last good snapshot, refresh in background.
     var cachedB = null;
-    try { cachedB = JSON.parse(localStorage.getItem('towos_boot')) } catch(e){}
+    try { cachedB = JSON.parse(sessionStorage.getItem('towos_boot')) } catch(e){}
     if (cachedB) { B = cachedB; hideLogin(); paint(); }
     else showLogin('Loading…');
     boot();
-  } else {
-    google.accounts.id.prompt();   // One Tap re-auth when possible
   }
 }
 
@@ -246,7 +246,7 @@ function api(fn, args, onOk){
       spin(false);
       if (/Not authorized/i.test(e.message)) {
         var badCred = CRED;
-        try { localStorage.removeItem('towos_cred') } catch(x){}
+        try { sessionStorage.removeItem('towos_cred') } catch(x){}
         CRED = null; showLogin('Sign-in rejected — running diagnostic…');
         // Ask the server exactly why, and print it on the login card.
         fetch(API_URL + '?api=1&fn=dashDiag&args=' +
@@ -281,7 +281,7 @@ function fail(e){spin(false);toast((e&&e.message)||String(e))}
 function boot(){
   api('dashBoot', [KEYV()], function(b){
     B=b;
-    try { localStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
+    try { sessionStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
     hideLogin(); paint();
   });
 }
