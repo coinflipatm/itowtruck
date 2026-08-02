@@ -191,7 +191,9 @@ function hideLogin(){ document.getElementById('loginOv').style.display = 'none' 
 function onCred(resp){
   CRED = resp.credential;
   try { localStorage.setItem('towos_cred', CRED) } catch(e){}
-  hideLogin(); boot();
+  // Login overlay stays up until the server ACCEPTS the account —
+  // unauthorized users never see the app shell.
+  showLogin('Checking access…'); boot();
 }
 function initAuth(){
   if (!window.google || !google.accounts) { setTimeout(initAuth, 150); return }
@@ -201,22 +203,46 @@ function initAuth(){
   var saved = null;
   try { saved = localStorage.getItem('towos_cred') } catch(e){}
   if (saved && jwtExpMs(saved) > Date.now() + 60000) {
-    CRED = saved; hideLogin(); boot();
+    CRED = saved;
+    // Paint instantly from the last good snapshot, refresh in background.
+    var cachedB = null;
+    try { cachedB = JSON.parse(localStorage.getItem('towos_boot')) } catch(e){}
+    if (cachedB) { B = cachedB; hideLogin(); paint(); }
+    else showLogin('Loading…');
+    boot();
   } else {
     google.accounts.id.prompt();   // One Tap re-auth when possible
   }
 }
 
+// fetch with one automatic retry — Apps Script occasionally answers a
+// transient HTML error page instead of JSON; a second try usually lands.
+function apiFetch(url, attempt){
+  return fetch(url).then(function(r){ return r.text() }).then(function(txt){
+    try { return JSON.parse(txt) }
+    catch(e){ throw new Error('NONJSON:' + txt.substring(0, 80)) }
+  }).catch(function(e){
+    if (attempt < 1) return new Promise(function(res){ setTimeout(res, 1500) })
+      .then(function(){ return apiFetch(url, attempt + 1) });
+    throw e;
+  });
+}
+
 function api(fn, args, onOk){
   spin(true);
-  fetch(API_URL + '?api=1&fn=' + encodeURIComponent(fn) +
-        '&args=' + encodeURIComponent(JSON.stringify(args)))
-    .then(function(r){ return r.json() })
+  apiFetch(API_URL + '?api=1&fn=' + encodeURIComponent(fn) +
+        '&args=' + encodeURIComponent(JSON.stringify(args)), 0)
     .then(function(j){
       if (!j.ok) throw new Error(j.error || 'Request failed');
       spin(false); onOk(j.data);
     })
     .catch(function(e){
+      if (/^NONJSON/.test(e.message)) {
+        spin(false);
+        toast('Server hiccup — tap again in a few seconds.');
+        console.log('raw response:', e.message);
+        return;
+      }
       spin(false);
       if (/Not authorized/i.test(e.message)) {
         var badCred = CRED;
@@ -254,13 +280,18 @@ function fail(e){spin(false);toast((e&&e.message)||String(e))}
 
 function boot(){
   api('dashBoot', [KEYV()], function(b){
-    B=b; $('me').textContent=b.me;
-    if(!selDriver){
-      var firstActive=b.roster.filter(function(d){return /^active$/i.test(d.status)&&d.role==='Driver'})[0];
-      selDriver=firstActive?firstActive.id:(b.roster[0]&&b.roster[0].id);
-    }
-    renderRoster(); renderSched();
+    B=b;
+    try { localStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
+    hideLogin(); paint();
   });
+}
+function paint(){
+  $('me').textContent = B.me + (B.t ? ' · server '+(B.t.verify+B.t.sheets)+'ms' : '');
+  if(!selDriver){
+    var firstActive=B.roster.filter(function(d){return /^active$/i.test(d.status)&&d.role==='Driver'})[0];
+    selDriver=firstActive?firstActive.id:(B.roster[0]&&B.roster[0].id);
+  }
+  renderRoster(); renderSched();
 }
 
 function dispName(d){return d.pref||d.first||d.full}
