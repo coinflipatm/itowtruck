@@ -226,6 +226,18 @@
   <button class="btn sec" onclick="closeSheets()">Cancel</button>
 </div>
 
+<!-- today action sheet -->
+<div class="sheet" id="shTAct">
+  <h3 id="taTitle"></h3>
+  <div class="meta" id="taMeta" style="margin-bottom:10px"></div>
+  <div id="taTimeWrap">
+    <label id="taTimeLbl">Time (blank = right now)</label>
+    <input type="time" id="taTime">
+  </div>
+  <div id="taBtns"></div>
+  <button class="btn sec" onclick="closeSheets()">Cancel</button>
+</div>
+
 <!-- shift editor -->
 <div class="sheet" id="shShift">
   <h3 id="sTitle"></h3>
@@ -445,7 +457,7 @@ function showTab(t){
 /* ============ TODAY BOARD ============ */
 function loadToday(force){
   if(TD&&!force){renderToday();return}
-  api('dashToday',[KEYV()],function(t){TD=t;renderToday()});
+  api('dashToday',[KEYV(),force?1:0],function(t){TD=t;renderToday()});
 }
 function renderToday(){
   $('tdLabel').textContent=TD.label+' \u00b7 as of '+TD.now;
@@ -469,6 +481,8 @@ function renderToday(){
 }
 function todayCard(r){
   var el=document.createElement('div'); el.className='card tcard';
+  el.style.cursor='pointer';
+  el.onclick=function(){openTodayAction(r)};
   var chip='';
   if(r.state==='ON')chip='<span class="chip ok">ON'+(r.sinceYesterday?' \u00b7 overnight':'')+'</span>';
   else if(r.state==='LATE')chip='<span class="chip warn">'+fmtLate(r.lateMin)+' late</span>';
@@ -500,6 +514,75 @@ function todayCard(r){
     '<div class="sched">'+sched+'</div>'+
     (act?'<div class="act">'+act+'</div>':'');
   return el;
+}
+var taRow=null;
+function openTodayAction(r){
+  taRow=r;
+  $('taTitle').textContent=r.name;
+  var meta=[];
+  if(r.schedStart)meta.push('Sched '+fmtT(r.schedStart)+'\u2013'+fmtT(r.schedEnd)+(r.schedOvernight?' +1d':''));
+  if(r.inT)meta.push('In '+fmtT(r.inT)+(r.sinceYesterday?' (yest)':''));
+  if(r.outT)meta.push('Out '+fmtT(r.outT));
+  if(r.off)meta.push('OFF'+(r.offReason?': '+r.offReason:''));
+  $('taMeta').textContent=meta.join(' \u00b7 ')||'\u2014';
+  $('taTime').value='';
+  var b=$('taBtns'); b.innerHTML='';
+  var mk=function(label,cls,fn){var x=document.createElement('button');x.className='btn'+(cls?' '+cls:'');x.textContent=label;x.onclick=fn;b.appendChild(x)};
+  var showTime=true;
+  if(r.state==='ON'){
+    $('taTimeLbl').textContent='Clock-out time (blank = right now)';
+    mk('Clock out','',function(){taPunch('out')});
+  } else if(r.state==='LATE'||r.state==='SOON'){
+    $('taTimeLbl').textContent='Clock-in time (blank = right now)';
+    mk('Clock in','',function(){taPunch('in')});
+    if(r.state==='LATE'){
+      mk('Mark missed (no-show)','danger',function(){
+        if(!confirm('Mark '+taRow.name+' MISSED today? Creates a 0-hour MISSED shift.'))return;
+        api('dashPunch',[taRow.id,'missed','no-show',KEYV()],function(res){
+          toast(res.reply); closeSheets(); TD=null; loadToday(true);
+        });
+      });
+    }
+    mk('Off today','sec',function(){
+      var why=prompt('Reason (optional):','')||'';
+      api('dashAddException',[taRow.id,B.today,B.today,'OFF','','',why,KEYV()],function(){
+        toast('Marked off'); closeSheets(); TD=null; SH=null; loadToday(true);
+      });
+    });
+  } else if((r.state==='DONE'||r.state==='EXTRA')&&r.shiftId){
+    showTime=false;
+    mk('Edit this shift','',function(){taOpenShiftEditor()});
+  } else if(r.state==='OFF'){
+    showTime=false;
+    mk('Clock in anyway','',function(){$('taTimeWrap').style.display='';taPunch('in')});
+  }
+  $('taTimeWrap').style.display=showTime?'':'none';
+  openSheet('shTAct');
+}
+function taPunch(action){
+  var t=$('taTime').value||'';
+  api('dashPunch',[taRow.id,action,t,KEYV()],function(res){
+    toast(res.reply); closeSheets(); TD=null; SH=null; loadToday(true);
+  });
+}
+function taOpenShiftEditor(){
+  var r=taRow;
+  var today=B.today;
+  editShift={ id:r.shiftId, driverId:r.id,
+    date:(r.overnightDone||r.sinceYesterday)?_ymdShift_(today,-1):today,
+    day:'', inT:r.inT, outT:r.outT,
+    hours:r.hours, status:r.open?'OPEN':'CLOSED', outNextDay:!!r.overnightDone };
+  $('sTitle').textContent=r.name+' \u2014 today';
+  $('sMeta').textContent=r.shiftId+' \u00b7 '+(r.open?'OPEN':'CLOSED')+(r.overnightDone?' \u00b7 overnight':'');
+  $('sIn').value=r.inT||''; $('sOut').value=r.outT||''; $('sReason').value='';
+  $('sReopenBtn').style.display=r.open?'none':'';
+  closeSheets(); openSheet('shShift');
+}
+function _ymdShift_(ymd,d){
+  var p=ymd.split('-');
+  var dt=new Date(+p[0],+p[1]-1,+p[2]); dt.setDate(dt.getDate()+d);
+  var m=dt.getMonth()+1,day=dt.getDate();
+  return dt.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;
 }
 function fmtLate(min){
   if(min>=60){var h=Math.floor(min/60),m=min%60;return h+'h'+(m?m+'m':'')}
@@ -862,7 +945,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function openSheet(id){$('ov').className='ov show';$(id).className='sheet show'}
 function closeSheets(){$('ov').className='ov';
-  ['shDriver','shDay','shExc','shShift'].forEach(function(i){$(i).className='sheet'})}
+  ['shDriver','shDay','shExc','shShift','shTAct'].forEach(function(i){$(i).className='sheet'})}
 
 initAuth();
 </script>
