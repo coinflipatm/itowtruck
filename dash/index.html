@@ -18,7 +18,7 @@
   header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.3px}
   header .sub{font-size:11px;opacity:.75;margin-top:2px}
   .tabs{display:flex;margin-top:12px}
-  .tab{flex:1;text-align:center;padding:11px 0;font-size:13px;font-weight:600;
+  .tab{flex:1;text-align:center;padding:11px 0;font-size:12.5px;font-weight:600;
        color:#c9d4e8;border-bottom:3px solid transparent;cursor:pointer;user-select:none}
   .tab.on{color:#fff;border-bottom-color:#fff}
   main{padding:14px 12px;max-width:640px;margin:0 auto}
@@ -56,6 +56,16 @@
   .btn.sec{background:var(--card);color:var(--navy);border:1.5px solid var(--navy)}
   .btn.danger{background:#fff;color:var(--red);border:1.5px solid var(--red)}
   .btn:disabled{opacity:.5}
+  .chip.amber{background:#fff3e0;color:var(--amber)}
+  /* today board */
+  .tdhead{display:flex;align-items:center;justify-content:space-between;margin:2px 0 10px}
+  .tdhead span{font-weight:700;font-size:15px}
+  .tdhead .rf{border:1.5px solid var(--line);background:var(--card);border-radius:10px;
+              font-size:14px;padding:8px 16px;color:var(--navy);font-weight:700;cursor:pointer}
+  .tcard{cursor:default}
+  .tcard .sched{font-size:13px;color:var(--mut)}
+  .tcard .act{font-size:13px;margin-top:3px}
+  .tcard .act b{font-weight:700}
   /* modal */
   .ov{position:fixed;inset:0;background:rgba(10,16,30,.45);z-index:40;display:none}
   .ov.show{display:block}
@@ -74,7 +84,8 @@
          max-width:90vw;text-align:center}
   .spin{position:fixed;inset:0;z-index:98;display:none;align-items:center;justify-content:center;
         background:rgba(255,255,255,.5)}
-  .spin.show{display:flex}
+  .spin.show{display:flex;flex-direction:column;gap:12px}
+  .spintxt{font-size:14px;font-weight:600;color:var(--navy);text-align:center}
   .spin div{width:34px;height:34px;border:4px solid var(--line);border-top-color:var(--navy);
             border-radius:50%;animation:r 0.8s linear infinite}
   @keyframes r{to{transform:rotate(360deg)}}
@@ -100,6 +111,18 @@
   .switch.on{background:var(--green)}
   .switch::after{content:'';position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:left .15s}
   .switch.on::after{left:27px}
+  .enumrow{display:flex;gap:6px}
+  .echip{flex:1;text-align:center;padding:11px 0;border-radius:10px;border:1.5px solid var(--line);
+         background:var(--card);font-size:13px;font-weight:700;color:var(--mut);cursor:pointer}
+  .echip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+  .knob.locked{opacity:.75;background:#f7f8fb}
+  .lockval{font-size:14px;font-weight:600;color:var(--ink);word-break:break-all}
+  .kinfo{float:right;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);
+         background:var(--card);color:var(--mut);font-weight:700;font-size:13px;line-height:21px;
+         text-align:center;cursor:pointer}
+  .khelp{display:none;font-size:13px;color:var(--mut);background:var(--chip);border-radius:8px;
+         padding:9px 11px;margin:0 0 10px;line-height:1.45}
+  .khelp.show{display:block}
 </style>
 </head>
 <body>
@@ -107,7 +130,8 @@
   <h1>iTow · TowOS</h1>
   <div class="sub" id="me"></div>
   <div class="tabs">
-    <div class="tab on" id="tabR" onclick="showTab('roster')">Roster</div>
+    <div class="tab on" id="tabT" onclick="showTab('today')">Today</div>
+    <div class="tab" id="tabR" onclick="showTab('roster')">Roster</div>
     <div class="tab" id="tabS" onclick="showTab('sched')">Schedule</div>
     <div class="tab" id="tabH" onclick="showTab('shifts')">Shifts</div>
     <div class="tab" id="tabC" onclick="showTab('settings')">Settings</div>
@@ -115,7 +139,14 @@
 </header>
 
 <main>
-  <div id="vRoster"></div>
+  <div id="vToday">
+    <div class="tdhead">
+      <span id="tdLabel"></span>
+      <button class="rf" onclick="loadToday(true)">&#8635; Refresh</button>
+    </div>
+    <div id="todayList"><div class="empty">Loading&hellip;</div></div>
+  </div>
+  <div id="vRoster" style="display:none"></div>
   <div id="vSched" style="display:none">
     <div class="picker" id="picker"></div>
     <div class="secthead">Standing week (Fri–Thu)</div>
@@ -160,6 +191,8 @@
 <!-- day editor -->
 <div class="sheet" id="shDay">
   <h3 id="dayTitle"></h3>
+  <label>Apply to days</label>
+  <div class="picker" id="dayChips" style="padding-bottom:4px"></div>
   <div class="two">
     <div><label>Start</label><input type="time" id="dayStart"></div>
     <div><label>End</label><input type="time" id="dayEnd"></div>
@@ -209,7 +242,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="spin" id="spin"><div></div></div>
+<div class="spin" id="spin"><div></div><div id="spinTxt" class="spintxt"></div></div>
 
 <div class="ov show" id="loginOv" style="background:var(--bg)">
   <div style="position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);text-align:center;width:300px">
@@ -302,7 +335,7 @@ function api(fn, args, onOk){
         '&args=' + encodeURIComponent(JSON.stringify(args)), 0)
     .then(function(j){
       if (!j.ok) throw new Error(j.error || 'Request failed');
-      spin(false); onOk(j.data);
+      spin(false); spinMsg(''); onOk(j.data);
     })
     .catch(function(e){
       if (/^NONJSON/.test(e.message)) {
@@ -344,6 +377,7 @@ function api(fn, args, onOk){
 }
 
 var B = null;            // boot payload
+var TD = null;           // today-board payload
 var SH = null;           // shifts payload (per week)
 var CFG = null;          // settings payload
 var wkOff = 0;           // 0 = current pay week, -1 = last, ...
@@ -356,7 +390,17 @@ var DAYS = ['FRI','SAT','SUN','MON','TUE','WED','THU'];
 var DAYNAMES = {FRI:'Fri',SAT:'Sat',SUN:'Sun',MON:'Mon',TUE:'Tue',WED:'Wed',THU:'Thu'};
 
 function $(id){return document.getElementById(id)}
-function spin(on){$('spin').className = on?'spin show':'spin'}
+var BUSY=false;
+function spin(on){
+  BUSY=!!on;
+  $('spin').className = on?'spin show':'spin';
+  // hard guard against double-submit: disable every sheet button in flight
+  var btns=document.querySelectorAll('.sheet .btn, .knob .kbtn');
+  for(var i=0;i<btns.length;i++)btns[i].disabled=!!on;
+}
+function spinMsg(txt){
+  var el=$('spinTxt'); if(el)el.textContent=txt||'';
+}
 function toast(msg){var t=$('toast');t.textContent=msg;t.style.display='block';
   clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none'},2600)}
 function fail(e){spin(false);toast((e&&e.message)||String(e))}
@@ -368,10 +412,12 @@ function boot(){
       try { sessionStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
     }
     hideLogin(); paint();
+    if(!TD) loadToday(false);
   });
 }
 function paint(){
   $('me').textContent = B.me + (B.t ? ' · '+B.t.verify+'+'+B.t.sheets+'ms'+(B.t.cached?' \u26a1':'') : '');
+  $('tabC').style.display = B.canSettings ? '' : 'none';
   if(!selDriver){
     var firstActive=B.roster.filter(function(d){return /^active$/i.test(d.status)&&d.role==='Driver'})[0];
     selDriver=firstActive?firstActive.id:(B.roster[0]&&B.roster[0].id);
@@ -385,14 +431,80 @@ function fmtT(t){ if(!t)return''; var p=t.split(':'),h=+p[0],m=p[1];
 function fmtTruck(u){return u?String(u).replace(/^truck_/,''):''}
 
 function showTab(t){
-  var tabs={roster:'tabR',sched:'tabS',shifts:'tabH',settings:'tabC'};
+  var tabs={today:'tabT',roster:'tabR',sched:'tabS',shifts:'tabH',settings:'tabC'};
   Object.keys(tabs).forEach(function(x){$(tabs[x]).className='tab'+(x===t?' on':'')});
+  $('vToday').style.display=t==='today'?'':'none';
   $('vRoster').style.display=t==='roster'?'':'none';
   $('vSched').style.display=t==='sched'?'':'none';
   $('vShifts').style.display=t==='shifts'?'':'none';
   $('vSettings').style.display=t==='settings'?'':'none';
+  if(t==='today'&&!TD)loadToday(false);
   if(t==='shifts'&&!SH)loadShifts();
   if(t==='settings'&&!CFG)loadCfg();
+}
+
+/* ============ TODAY BOARD ============ */
+function loadToday(force){
+  if(TD&&!force){renderToday();return}
+  api('dashToday',[KEYV()],function(t){TD=t;renderToday()});
+}
+function renderToday(){
+  $('tdLabel').textContent=TD.label+' \u00b7 as of '+TD.now;
+  var v=$('todayList'); v.innerHTML='';
+  if(!TD.rows.length){v.innerHTML='<div class="empty">Nothing scheduled and nobody punched. Quiet day.</div>';return}
+  var groups=[
+    ['ON','On the clock'],
+    ['LATE','No punch \u2014 past start'],
+    ['SOON','Coming up'],
+    ['DONE','Done today'],
+    ['EXTRA','Unscheduled punches'],
+    ['OFF','Off today']
+  ];
+  groups.forEach(function(g){
+    var rows=TD.rows.filter(function(r){return r.state===g[0]});
+    if(!rows.length)return;
+    var hd=document.createElement('div'); hd.className='secthead'; hd.textContent=g[1]+' ('+rows.length+')';
+    v.appendChild(hd);
+    rows.forEach(function(r){v.appendChild(todayCard(r))});
+  });
+}
+function todayCard(r){
+  var el=document.createElement('div'); el.className='card tcard';
+  var chip='';
+  if(r.state==='ON')chip='<span class="chip ok">ON'+(r.sinceYesterday?' \u00b7 overnight':'')+'</span>';
+  else if(r.state==='LATE')chip='<span class="chip warn">'+fmtLate(r.lateMin)+' late</span>';
+  else if(r.state==='SOON')chip='<span class="chip">at '+fmtT(r.schedStart)+'</span>';
+  else if(r.state==='DONE')chip='<span class="chip">'+(r.hours?r.hours+'h':'done')+'</span>';
+  else if(r.state==='EXTRA')chip='<span class="chip amber">unscheduled</span>';
+  else chip='<span class="chip dim">OFF</span>';
+
+  var sched=r.schedStart
+    ? 'Sched '+fmtT(r.schedStart)+' \u2013 '+fmtT(r.schedEnd)+(r.schedOvernight?' +1d':'')
+    : (r.off?'Not scheduled (off)':'Not scheduled');
+
+  var act='';
+  if(r.state==='ON'){
+    act='<b>In '+fmtT(r.inT)+'</b>'+(r.sinceYesterday?' (yesterday)':'')+' \u00b7 still on';
+  } else if(r.state==='DONE'){
+    act='<b>'+fmtT(r.inT)+' \u2013 '+fmtT(r.outT)+'</b>'+(r.overnightDone?' (overnight)':'')+
+        (r.hours?' \u00b7 '+r.hours+'h':'');
+  } else if(r.state==='LATE'){
+    act='<b style="color:var(--red)">No punch yet</b>';
+  } else if(r.state==='SOON'){
+    act='Starts '+fmtT(r.schedStart);
+  } else if(r.off&&r.offReason){
+    act=esc(r.offReason);
+  }
+  el.innerHTML='<div class="rowline"><span class="nm">'+esc(r.name)+
+    (r.role&&r.role!=='Driver'?' <span style="font-weight:400;color:var(--mut);font-size:12px">'+esc(r.role)+'</span>':'')+
+    '</span>'+chip+'</div>'+
+    '<div class="sched">'+sched+'</div>'+
+    (act?'<div class="act">'+act+'</div>':'');
+  return el;
+}
+function fmtLate(min){
+  if(min>=60){var h=Math.floor(min/60),m=min%60;return h+'h'+(m?m+'m':'')}
+  return min+'m';
 }
 
 /* ============ SHIFTS ============ */
@@ -459,7 +571,7 @@ function saveShift(){
   if(outV&&outV!==s.outT)jobs.push(['clock_out',outV]);
   if(!jobs.length){toast('No time changes');return}
   var run=function(i){
-    if(i>=jobs.length){toast('Saved');closeSheets();SH=null;loadShifts();return}
+    if(i>=jobs.length){toast('Saved');closeSheets();SH=null;TD=null;loadShifts();return}
     api('dashFixShiftTime',[s.id,jobs[i][0],jobs[i][1],why,KEYV()],function(){run(i+1)});
   };
   run(0);
@@ -467,12 +579,12 @@ function saveShift(){
 function reopenShift(){
   var s=editShift;
   if(!confirm('Reopen this shift? Clock-out and hours will be cleared. Record only \u2014 it does not put them back on the live clock.'))return;
-  api('dashReopenShift',[s.id,KEYV()],function(){toast('Reopened');closeSheets();SH=null;loadShifts()});
+  api('dashReopenShift',[s.id,KEYV()],function(){toast('Reopened');closeSheets();SH=null;TD=null;loadShifts()});
 }
 function deleteShift(){
   var s=editShift;
   if(!confirm('DELETE this shift'+(s.hours?' ('+s.hours+'h)':'')+' on '+s.date+'? The full row is preserved in Bot_Log, but it disappears from payroll.'))return;
-  api('dashDeleteShift',[s.id,KEYV()],function(){toast('Deleted');closeSheets();SH=null;loadShifts()});
+  api('dashDeleteShift',[s.id,KEYV()],function(){toast('Deleted');closeSheets();SH=null;TD=null;loadShifts()});
 }
 
 /* ============ SETTINGS ============ */
@@ -481,34 +593,75 @@ function loadCfg(){
 }
 function renderSettings(){
   var v=$('cfgList'); v.innerHTML='';
-  if(!CFG.knobs.length){v.innerHTML='<div class="empty">No editable settings found.</div>';return}
+  if(!CFG.knobs.length){v.innerHTML='<div class="empty">No settings found.</div>';return}
   CFG.knobs.forEach(function(kn){
-    var el=document.createElement('div'); el.className='knob';
-    el.innerHTML='<div class="kdesc">'+esc(kn.desc||kn.key)+'</div><div class="kkey">'+esc(kn.key)+'</div>';
+    var el=document.createElement('div');
+    el.className='knob'+(kn.type==='locked'?' locked':'');
+    var head=document.createElement('div');
+    head.innerHTML='<span class="kinfo">i</span><div class="kdesc">'+esc(kn.label)+
+      (kn.type==='locked'?' \ud83d\udd12':'')+'</div><div class="kkey">'+esc(kn.key)+'</div>';
+    el.appendChild(head);
+    var help=document.createElement('div'); help.className='khelp';
+    help.textContent=kn.help||'';
+    el.appendChild(help);
+    head.querySelector('.kinfo').onclick=function(ev){
+      ev.stopPropagation();
+      help.className='khelp'+(/show/.test(help.className)?'':' show');
+    };
     var row=document.createElement('div'); row.className='krow';
-    var isBool=/^(true|false)$/i.test(kn.value.trim());
-    if(isBool){
-      var on=/^true$/i.test(kn.value.trim());
+    if(kn.type==='toggle'){
+      var on=kn.value.trim().toLowerCase()===String(kn.valOn).toLowerCase();
       var sw=document.createElement('div'); sw.className='switch'+(on?' on':'');
       sw.onclick=function(){
-        var next=on?'FALSE':'TRUE';
-        if(!confirm('Set '+kn.key+' to '+next+'? This changes live system behavior.'))return;
-        api('dashSetConfig',[kn.key,next,KEYV()],function(){toast(kn.key+' = '+next);CFG=null;loadCfg()});
+        var next=on?kn.valOff:kn.valOn;
+        if(!confirm('Turn '+esc(kn.label)+' '+(on?'OFF':'ON')+'? This changes live system behavior.'))return;
+        api('dashSetConfig',[kn.key,next,KEYV()],function(){toast(kn.label+' '+(on?'off':'on'));CFG=null;loadCfg()});
       };
       var lbl=document.createElement('span');
       lbl.style.fontWeight='700'; lbl.style.color=on?'var(--green)':'var(--mut)';
       lbl.textContent=on?'ON':'OFF';
       row.appendChild(sw); row.appendChild(lbl);
-    } else {
-      var inp=document.createElement('input'); inp.value=kn.value;
-      var btn=document.createElement('button'); btn.className='kbtn'; btn.textContent='Save';
-      btn.onclick=function(){
-        var nv=inp.value.trim();
+    } else if(kn.type==='enum'){
+      row.className='enumrow';
+      kn.options.forEach(function(opt){
+        var c=document.createElement('div');
+        var cur=kn.value.trim().toUpperCase()===opt;
+        c.className='echip'+(cur?' on':'');
+        c.textContent=opt;
+        c.onclick=function(){
+          if(cur)return;
+          if(!confirm('Set '+kn.label+' to '+opt+'? This changes live system behavior.'))return;
+          api('dashSetConfig',[kn.key,opt,KEYV()],function(){toast(kn.label+' \u2192 '+opt);CFG=null;loadCfg()});
+        };
+        row.appendChild(c);
+      });
+    } else if(kn.type==='number'){
+      var ninp=document.createElement('input'); ninp.value=kn.value;
+      ninp.type='number'; ninp.inputMode='numeric';
+      if(kn.min!=null)ninp.min=kn.min; if(kn.max!=null)ninp.max=kn.max;
+      var nbtn=document.createElement('button'); nbtn.className='kbtn'; nbtn.textContent='Save';
+      nbtn.onclick=function(){
+        var nv=ninp.value.trim();
         if(nv===kn.value){toast('No change');return}
-        if(!confirm('Set '+kn.key+' to "'+nv+'"?'))return;
-        api('dashSetConfig',[kn.key,nv,KEYV()],function(r){toast(r.changed?'Saved':'No change');CFG=null;loadCfg()});
+        if(!confirm('Set '+kn.label+' to '+nv+'?'))return;
+        api('dashSetConfig',[kn.key,nv,KEYV()],function(){toast('Saved');CFG=null;loadCfg()});
       };
-      row.appendChild(inp); row.appendChild(btn);
+      row.appendChild(ninp); row.appendChild(nbtn);
+    } else if(kn.type==='text'){
+      var tinp=document.createElement('input'); tinp.value=kn.value;
+      var tbtn=document.createElement('button'); tbtn.className='kbtn'; tbtn.textContent='Save';
+      tbtn.onclick=function(){
+        var nv=tinp.value.trim();
+        if(nv===kn.value){toast('No change');return}
+        if(!confirm('Change '+kn.label+'?'))return;
+        api('dashSetConfig',[kn.key,nv,KEYV()],function(){toast('Saved');CFG=null;loadCfg()});
+      };
+      row.appendChild(tinp); row.appendChild(tbtn);
+    } else {
+      // locked — value on display, no control
+      var lv=document.createElement('div'); lv.className='lockval';
+      lv.textContent=kn.value||'(blank)';
+      row.appendChild(lv);
     }
     el.appendChild(row);
     v.appendChild(el);
@@ -551,12 +704,14 @@ function openDriver(d){
   openSheet('shDriver');
 }
 function saveDriver(){
-  api('dashSaveDriver', [{
-    id:editDriver.id, pref:$('dPref').value.trim(), phone:$('dPhone').value.trim(),
-    role:$('dRole').value, tier:$('dTier').value, status:$('dStatus').value
-  }, KEYV()], function(r){
+  var p={ id:editDriver.id, pref:$('dPref').value.trim(), phone:$('dPhone').value.trim(),
+    role:$('dRole').value, tier:$('dTier').value, status:$('dStatus').value };
+  api('dashSaveDriver', [p, KEYV()], function(r){
+    // optimistic local patch
+    var d=B.roster.filter(function(x){return x.id===p.id})[0];
+    if(d){d.pref=p.pref;d.phone=p.phone;d.role=p.role;d.tier=p.tier;d.status=p.status}
     toast(r.changes.length?('Saved: '+r.changes.length+' change(s)'):'No changes');
-    closeSheets(); boot();
+    closeSheets(); TD=null; renderRoster(); renderSched();
   });
 }
 function addAlias(){
@@ -599,7 +754,7 @@ function renderSched(){
       (e.reason?'<div class="meta">'+esc(e.reason)+'</div>':'')+'</span><span class="x">✕</span>';
     el.querySelector('.x').onclick=function(){
       if(confirm('Remove: '+e.driver+' '+what+' on '+when+'?')){
-        api('dashCancelException', [e.id,KEYV()], function(){toast('Removed');boot()});
+        api('dashCancelException', [e.id,KEYV()], function(){toast('Removed');TD=null;boot()});
       }
     };
     ex.appendChild(el);
@@ -612,29 +767,58 @@ function shortName(id,fallback){
 function openDay(day,row){
   editDay=day;
   var d=B.roster.filter(function(x){return x.id===selDriver})[0];
-  $('dayTitle').textContent=dispName(d)+' — '+DAYNAMES[day];
+  $('dayTitle').textContent=dispName(d)+' \u2014 schedule';
   $('dayStart').value=row?row.start:'07:00';
   $('dayEnd').value=row?row.end:'19:00';
-  var us=$('dayUnit'); us.innerHTML='<option value="">— none —</option>';
+  var us=$('dayUnit'); us.innerHTML='<option value="">\u2014 none \u2014</option>';
   B.units.forEach(function(u){
     var o=document.createElement('option'); o.value=u; o.textContent='truck '+fmtTruck(u);
     if(row&&row.unit===u)o.selected=true; us.appendChild(o);
+  });
+  // multi-day chips — tapped day preselected, tap others to batch
+  var dc=$('dayChips'); dc.innerHTML='';
+  DAYS.forEach(function(dd){
+    var c=document.createElement('div');
+    c.className='pchip'+(dd===day?' on':'');
+    c.textContent=DAYNAMES[dd];
+    c.dataset.day=dd;
+    c.onclick=function(){c.className='pchip'+(/ on/.test(c.className)?'':' on')};
+    dc.appendChild(c);
   });
   openSheet('shDay');
 }
 function saveDay(){
   var s=$('dayStart').value,e=$('dayEnd').value;
   if(!s||!e){toast('Need start and end');return}
-  api('dashSetScheduleDay', [selDriver,editDay,s,e,$('dayUnit').value,KEYV()], function(r){
-    toast(r.reply_text||'Saved'); closeSheets(); boot();
+  var days=[].slice.call($('dayChips').querySelectorAll('.pchip.on'))
+    .map(function(c){return c.dataset.day});
+  if(!days.length){toast('Pick at least one day');return}
+  var unit=$('dayUnit').value;
+  api('dashSetScheduleWeek', [selDriver,days,s,e,unit,KEYV()], function(r){
+    // optimistic local patch — no full reboot
+    days.forEach(function(dd){
+      B.schedule=B.schedule.filter(function(x){return !(x.driverId===selDriver&&x.day===dd)});
+      B.schedule.push({id:'',driverId:selDriver,day:dd,start:s,end:e,unit:unit});
+    });
+    toast('Saved '+r.filed+' day(s)'); closeSheets(); TD=null; renderSched();
   });
 }
 function clearDay(){
   var d=B.roster.filter(function(x){return x.id===selDriver})[0];
-  if(!confirm('Clear '+DAYNAMES[editDay]+' for '+dispName(d)+'? They will not be scheduled that day going forward.'))return;
-  api('dashClearScheduleDay', [selDriver,editDay,KEYV()], function(){
-    toast('Day cleared'); closeSheets(); boot();
-  });
+  var days=[].slice.call($('dayChips').querySelectorAll('.pchip.on'))
+    .map(function(c){return c.dataset.day});
+  if(!days.length)days=[editDay];
+  if(!confirm('Clear '+days.map(function(x){return DAYNAMES[x]}).join(', ')+' for '+dispName(d)+'? Not scheduled those days going forward.'))return;
+  var run=function(i){
+    if(i>=days.length){
+      days.forEach(function(dd){
+        B.schedule=B.schedule.filter(function(x){return !(x.driverId===selDriver&&x.day===dd)});
+      });
+      toast('Cleared'); closeSheets(); TD=null; renderSched(); return;
+    }
+    api('dashClearScheduleDay',[selDriver,days[i],KEYV()],function(){run(i+1)});
+  };
+  run(0);
 }
 function openExc(){
   var ds=$('excDriver'); ds.innerHTML='';
@@ -650,12 +834,22 @@ function excTypeChange(){
   $('excTimes').style.display=$('excType').value==='OFF'?'none':'flex';
 }
 function fileExc(){
-  var t=$('excType').value, f=$('excFrom').value, to=$('excTo').value;
+  if(BUSY)return;                       // one-shot guard
+  var t=$('excType').value, f=$('excFrom').value, to=$('excTo').value||f;
   if(!f){toast('Need a from date');return}
   if(t!=='OFF'&&(!$('excStart').value||!$('excEnd').value)){toast('Need start and end times');return}
+  var nDays=Math.round((new Date(to)-new Date(f))/86400000)+1;
+  spinMsg(nDays>1?('Filing '+nDays+' days\u2026'):'Filing\u2026');
   api('dashAddException',
-    [$('excDriver').value,f,to||f,t,$('excStart').value,$('excEnd').value,$('excReason').value.trim(),KEYV()],
-    function(r){ toast('Filed '+r.filed+' day(s)'); closeSheets(); boot(); });
+    [$('excDriver').value,f,to,t,$('excStart').value,$('excEnd').value,$('excReason').value.trim(),KEYV()],
+    function(r){
+      var msg=[];
+      if(r.filed)msg.push('Filed '+r.filed+' day(s)');
+      if(r.replaced)msg.push(r.replaced+' replaced');
+      if(r.skipped)msg.push(r.skipped+' already filed');
+      toast(msg.join(' \u00b7 ')||'Nothing to change');
+      closeSheets(); SH=null; TD=null; boot();
+    });
 }
 
 /* ============ util ============ */
