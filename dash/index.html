@@ -263,7 +263,7 @@ var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleuserco
 //         by refreshing between attempts).
 // false = original behavior: session + cached data survive refreshes
 //         within the same tab; fresh opens still require a tap.
-var FORCE_LOGIN = true;
+var FORCE_LOGIN = false;
 
 /* ======================================================== */
 
@@ -287,7 +287,7 @@ function onCred(resp){
   }
   // Login overlay stays up until the server ACCEPTS the account —
   // unauthorized users never see the app shell.
-  showLogin('Checking access…'); boot();
+  showLogin('Checking access…'); boot(); loadToday(false);
 }
 function initAuth(){
   if (!window.google || !google.accounts) { setTimeout(initAuth, 150); return }
@@ -312,7 +312,7 @@ function initAuth(){
     try { cachedB = JSON.parse(sessionStorage.getItem('towos_boot')) } catch(e){}
     if (cachedB) { B = cachedB; hideLogin(); paint(); }
     else showLogin('Loading…');
-    boot();
+    boot(); loadToday(false);
   }
 }
 
@@ -412,7 +412,6 @@ function boot(){
       try { sessionStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
     }
     hideLogin(); paint();
-    if(!TD) loadToday(false);
   });
 }
 function paint(){
