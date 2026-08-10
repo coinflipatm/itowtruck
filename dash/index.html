@@ -13,7 +13,7 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-       background:var(--bg);color:var(--ink);padding-bottom:40px}
+       background:var(--bg);color:var(--ink);padding-bottom:64px}
   header{background:var(--navy);color:#fff;padding:14px 16px 0;position:sticky;top:0;z-index:20}
   header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.3px}
   header .sub{font-size:11px;opacity:.75;margin-top:2px}
@@ -123,6 +123,12 @@
   .khelp{display:none;font-size:13px;color:var(--mut);background:var(--chip);border-radius:8px;
          padding:9px 11px;margin:0 0 10px;line-height:1.45}
   .khelp.show{display:block}
+  /* v3.6 health footer */
+  #foot{position:fixed;left:0;right:0;bottom:0;background:var(--card);
+        border-top:1px solid var(--line);font-size:11px;color:var(--mut);
+        text-align:center;padding:6px 8px;z-index:15}
+  #foot b{color:var(--navy);font-weight:700}
+  #foot .stale{color:var(--amber);font-weight:700}
 </style>
 </head>
 <body>
@@ -253,6 +259,7 @@
   <button class="btn sec" onclick="closeSheets()">Cancel</button>
 </div>
 
+<div id="foot"></div>
 <div class="toast" id="toast"></div>
 <div class="spin" id="spin"><div></div><div id="spinTxt" class="spintxt"></div></div>
 
@@ -299,7 +306,7 @@ function onCred(resp){
   }
   // Login overlay stays up until the server ACCEPTS the account —
   // unauthorized users never see the app shell.
-  showLogin('Checking access…'); boot(); loadToday(false);
+  showLogin('Checking access…'); loadInit(false, false);
 }
 function initAuth(){
   if (!window.google || !google.accounts) { setTimeout(initAuth, 150); return }
@@ -320,11 +327,17 @@ function initAuth(){
   try { saved = sessionStorage.getItem('towos_cred') } catch(e){}
   if (saved && jwtExpMs(saved) > Date.now() + 60000) {
     CRED = saved;
-    var cachedB = null;
-    try { cachedB = JSON.parse(sessionStorage.getItem('towos_boot')) } catch(e){}
-    if (cachedB) { B = cachedB; hideLogin(); paint(); }
-    else showLogin('Loading…');
-    boot(); loadToday(false);
+    var cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem('towos_init')) } catch(e){}
+    if (cached && cached.d) {
+      // stale-while-revalidate: last-known screen NOW, fresh data quietly
+      B=cached.d.boot; TD=cached.d.today; HEALTH=cached.d.health;
+      hideLogin(); paint(); renderToday(); renderFoot(true);
+      loadInit(false, true);
+    } else {
+      showLogin('Loading…');
+      loadInit(false, false);
+    }
   }
 }
 
@@ -341,8 +354,8 @@ function apiFetch(url, attempt){
   });
 }
 
-function api(fn, args, onOk){
-  spin(true);
+function api(fn, args, onOk, quiet){
+  if(!quiet)spin(true);
   apiFetch(API_URL + '?api=1&fn=' + encodeURIComponent(fn) +
         '&args=' + encodeURIComponent(JSON.stringify(args)), 0)
     .then(function(j){
@@ -390,6 +403,8 @@ function api(fn, args, onOk){
 
 var B = null;            // boot payload
 var TD = null;           // today-board payload
+var HEALTH = null;
+var lastInitAt = 0;
 var SH = null;           // shifts payload (per week)
 var CFG = null;          // settings payload
 var wkOff = 0;           // 0 = current pay week, -1 = last, ...
@@ -417,14 +432,29 @@ function toast(msg){var t=$('toast');t.textContent=msg;t.style.display='block';
   clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none'},2600)}
 function fail(e){spin(false);toast((e&&e.message)||String(e))}
 
-function boot(){
-  api('dashBoot', [KEYV()], function(b){
-    B=b;
+function boot(){ loadInit(false, false); }
+
+// v3.6: ONE call for boot + today + health, replacing two web-app hits.
+// quiet=true refreshes in the background with no spinner (stale-while-
+// revalidate: the screen already shows the last-known state).
+function loadInit(force, quiet){
+  api('dashInit', [KEYV(), force?1:0], function(d){
+    B=d.boot; TD=d.today; HEALTH=d.health; lastInitAt=Date.now();
     if (!FORCE_LOGIN) {
-      try { sessionStorage.setItem('towos_boot', JSON.stringify(b)) } catch(e){}
+      try { sessionStorage.setItem('towos_init', JSON.stringify({t:lastInitAt, d:d})) } catch(e){}
     }
-    hideLogin(); paint();
-  });
+    hideLogin(); paint(); renderToday(); renderFoot(false);
+  }, quiet);
+}
+
+function renderFoot(stale){
+  var f=$('foot'); if(!f||!HEALTH)return;
+  f.innerHTML='<b>TowOS v'+esc(HEALTH.version)+'</b> \u00b7 data '+
+    (stale?'<span class="stale">as of '+esc(HEALTH.generatedAt)+' (refreshing\u2026)</span>'
+          :'as of '+esc(HEALTH.generatedAt))+
+    (HEALTH.cached?' \u26a1':'')+
+    (HEALTH.lastBackup?' \u00b7 backup '+esc(HEALTH.lastBackup):'')+
+    (/^fallback/.test(HEALTH.mode||'')?' \u00b7 <span class="stale">slow mode</span>':'');
 }
 function paint(){
   $('me').textContent = B.me + (B.t ? ' · '+B.t.verify+'+'+B.t.sheets+'ms'+(B.t.cached?' \u26a1':'') : '');
@@ -457,7 +487,7 @@ function showTab(t){
 /* ============ TODAY BOARD ============ */
 function loadToday(force){
   if(TD&&!force){renderToday();return}
-  api('dashToday',[KEYV(),force?1:0],function(t){TD=t;renderToday()});
+  loadInit(!!force, false);
 }
 function renderToday(){
   $('tdLabel').textContent=TD.label+' \u00b7 as of '+TD.now;
@@ -946,6 +976,13 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
 function openSheet(id){$('ov').className='ov show';$(id).className='sheet show'}
 function closeSheets(){$('ov').className='ov';
   ['shDriver','shDay','shExc','shShift','shTAct'].forEach(function(i){$(i).className='sheet'})}
+
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible' && CRED && Date.now()-lastInitAt>60000){
+    renderFoot(true);
+    loadInit(false, true);
+  }
+});
 
 initAuth();
 </script>
