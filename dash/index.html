@@ -62,7 +62,14 @@
   .tdhead span{font-weight:700;font-size:15px}
   .tdhead .rf{border:1.5px solid var(--line);background:var(--card);border-radius:10px;
               font-size:14px;padding:8px 16px;color:var(--navy);font-weight:700;cursor:pointer}
-  .tcard{cursor:default}
+  .tcard{cursor:default;border-left:5px solid var(--line)}
+  .tcard.st-ON{border-left-color:var(--green);background:#f4faf6}
+  .tcard.st-LATE{border-left-color:var(--red);background:#fdf3f2}
+  .tcard.st-SOON{border-left-color:#3b6fd4}
+  .tcard.st-DONE{border-left-color:#9aa7bd}
+  .tcard.st-EXTRA{border-left-color:var(--amber);background:#fffaf2}
+  .tcard.st-OFF{border-left-color:#d5dae4;opacity:.65}
+  .tcard.st-MISSED{border-left-color:var(--red);background:#faf5f5;opacity:.85}
   .tcard .sched{font-size:13px;color:var(--mut)}
   .tcard .act{font-size:13px;margin-top:3px}
   .tcard .act b{font-weight:700}
@@ -454,7 +461,18 @@ function renderFoot(stale){
           :'as of '+esc(HEALTH.generatedAt))+
     (HEALTH.cached?' \u26a1':'')+
     (HEALTH.lastBackup?' \u00b7 backup '+esc(HEALTH.lastBackup):'')+
-    (/^fallback/.test(HEALTH.mode||'')?' \u00b7 <span class="stale">slow mode</span>':'');
+    (/^fallback/.test(HEALTH.mode||'')?' \u00b7 <span class="stale">slow mode</span>':'')+
+    ' \u00b7 <a href="#" onclick="logout();return false" style="color:var(--navy);font-weight:700;text-decoration:none">Sign out</a>';
+}
+
+function logout(){
+  CRED=null; B=null; TD=null; HEALTH=null; lastInitAt=0;
+  try { sessionStorage.removeItem('towos_cred'); sessionStorage.removeItem('towos_init');
+        sessionStorage.removeItem('towos_boot'); } catch(e){}
+  try { if(window.google&&google.accounts) google.accounts.id.disableAutoSelect(); } catch(e){}
+  var f=$('foot'); if(f)f.innerHTML='';
+  document.getElementById('loginMsg').textContent='';
+  showLogin('Signed out.');
 }
 function paint(){
   $('me').textContent = B.me + (B.t ? ' · '+B.t.verify+'+'+B.t.sheets+'ms'+(B.t.cached?' \u26a1':'') : '');
@@ -496,6 +514,7 @@ function renderToday(){
   var groups=[
     ['ON','On the clock'],
     ['LATE','No punch \u2014 past start'],
+    ['MISSED','No-shows (marked missed)'],
     ['SOON','Coming up'],
     ['DONE','Done today'],
     ['EXTRA','Unscheduled punches'],
@@ -510,7 +529,7 @@ function renderToday(){
   });
 }
 function todayCard(r){
-  var el=document.createElement('div'); el.className='card tcard';
+  var el=document.createElement('div'); el.className='card tcard st-'+r.state;
   el.style.cursor='pointer';
   el.onclick=function(){openTodayAction(r)};
   var chip='';
@@ -519,6 +538,7 @@ function todayCard(r){
   else if(r.state==='SOON')chip='<span class="chip">at '+fmtT(r.schedStart)+'</span>';
   else if(r.state==='DONE')chip='<span class="chip">'+(r.hours?r.hours+'h':'done')+'</span>';
   else if(r.state==='EXTRA')chip='<span class="chip amber">unscheduled</span>';
+  else if(r.state==='MISSED')chip='<span class="chip warn">no-show</span>';
   else chip='<span class="chip dim">OFF</span>';
 
   var sched=r.schedStart
@@ -533,6 +553,8 @@ function todayCard(r){
         (r.hours?' \u00b7 '+r.hours+'h':'');
   } else if(r.state==='LATE'){
     act='<b style="color:var(--red)">No punch yet</b>';
+  } else if(r.state==='MISSED'){
+    act='<b style="color:var(--red)">Marked missed</b> \u00b7 0h';
   } else if(r.state==='SOON'){
     act='Starts '+fmtT(r.schedStart);
   } else if(r.off&&r.offReason){
@@ -582,6 +604,17 @@ function openTodayAction(r){
   } else if((r.state==='DONE'||r.state==='EXTRA')&&r.shiftId){
     showTime=false;
     mk('Edit this shift','',function(){taOpenShiftEditor()});
+  } else if(r.state==='MISSED'){
+    showTime=false;
+    if(r.shiftId){
+      mk('Remove no-show mark','danger',function(){
+        if(!confirm('Remove the MISSED record for '+taRow.name+'? Preserved in Bot_Log.'))return;
+        api('dashDeleteShift',[taRow.shiftId,KEYV()],function(){
+          toast('No-show mark removed'); closeSheets(); TD=null; loadInit(true,false);
+        });
+      });
+    }
+    mk('Clock in anyway','sec',function(){$('taTimeWrap').style.display='';taPunch('in')});
   } else if(r.state==='OFF'){
     showTime=false;
     mk('Clock in anyway','',function(){$('taTimeWrap').style.display='';taPunch('in')});
