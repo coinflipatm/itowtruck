@@ -1,121 +1,1060 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Apply to drive with iTow. CDL and chauffeur-licensed drivers. Flint, MI. USDOT# 2573313.">
-<title>Apply to Drive | iTow</title>
-<link rel="icon" type="image/png" href="/assets/logos/itow-logo.png">
-<link rel="shortcut icon" href="/assets/logos/itow-logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-@font-face {
-  font-family: 'SF Sports Night';
-  src: url('/font.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-:root {
-  --bg: #050505; --bg2: #0c0c0c; --card: #111; --card2: #161616;
-  --border: #1e1e1e; --border2: #333;
-  --white: #fff; --g1: #b0b0b0; --g2: #666; --g3: #444;
-  --dim: rgba(255,255,255,0.08);
-  --brand: 'SF Sports Night', sans-serif;
-  --body: 'Barlow', sans-serif;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{font-family:var(--body);background:var(--bg);color:var(--g1);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
-a{color:inherit;text-decoration:none}
-body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>iTow — Driver Application</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif; margin: 0; background: #f4f6f9; color: #1f2937; }
+    .wrap { max-width: 780px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    h1 { font-size: 22px; margin: 0 0 6px; color: #1a4480; }
+    h2 { font-size: 16px; margin: 0 0 12px; color: #1a4480; }
+    .sub { color: #6b7280; margin: 0 0 10px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 540px) {
+      .row, .row3 { grid-template-columns: 1fr; gap: 0; }
+    }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; font-size: 14px; color: #374151; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; background: #fff; box-sizing: border-box; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1a4480; box-shadow: 0 0 0 3px rgba(26,68,128,0.15); }
+    input.invalid, select.invalid, textarea.invalid { border-color: #dc2626; }
+    input[type=file] { padding: 6px; }
+    textarea { min-height: 70px; resize: vertical; }
+    .note, .small { color: #6b7280; font-size: 12px; margin-top: 4px; }
+    .warn { background: #fef3c7; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 4px; font-weight: normal; }
+    .field-err { color: #dc2626; font-size: 12px; margin-top: 4px; font-weight: 600; }
+    .field-warn { color: #92400e; font-size: 12px; margin-top: 4px; }
+    .success { background: #ecfdf5; color: #065f46; padding: 12px; border-radius: 8px; margin-top: 16px; }
+    .error { background: #fef2f2; color: #991b1b; padding: 12px; border-radius: 8px; margin-top: 16px; font-weight: 600; }
+    button.primary { padding: 14px 20px; border: 0; border-radius: 10px; background: #1a4480; color: white; font-weight: 700; cursor: pointer; font-size: 16px; }
+    button.primary:hover:enabled { background: #142f5a; }
+    button.primary:disabled { background: #9ca3af; cursor: not-allowed; }
+    button.secondary { padding: 8px 12px; background: #e5e7eb; color: #1f2937; border: 0; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    button.ghost { padding: 12px 18px; background: #fff; color: #1a4480; border: 1px solid #cbd5e1; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
+    button.ghost:hover { background: #f1f5f9; }
+    .chip-btn { display: inline-block; padding: 4px 10px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; border-radius: 12px; font-size: 12px; cursor: pointer; margin-top: 4px; }
 
-.nav{position:sticky;top:0;z-index:100;background:rgba(5,5,5,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 1.5rem;height:60px;display:flex;align-items:center;justify-content:space-between}
-.nav .back{font-family:var(--brand);font-size:1rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--g2);font-weight:600;transition:color 0.3s}
-.nav .back:hover{color:var(--white)}
-.nav .call{background:#fff;color:#000;padding:8px 20px;font-family:var(--brand);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:background 0.3s}
-.nav .call:hover{background:#ddd}
+    /* ===== Wizard ===== */
+    .progress-track { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 10px 0 8px; }
+    .progress-fill { height: 100%; background: #1a4480; border-radius: 4px; transition: width 0.25s; width: 0; }
+    .step-label { font-size: 13px; font-weight: 600; color: #1a4480; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .pill { font-size: 11px; padding: 4px 9px; border-radius: 12px; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; cursor: default; }
+    .pill.done { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; cursor: pointer; }
+    .pill.now { background: #1a4480; color: #fff; border-color: #1a4480; font-weight: 700; }
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+    .nav-row { display: flex; gap: 10px; justify-content: space-between; align-items: center; }
+    .nav-row .spacer { flex: 1; }
+    #stepErrors { margin-bottom: 10px; }
+    #stepErrors .error { margin-top: 0; font-weight: normal; font-size: 13px; }
+    #stepErrors b { display: block; margin-bottom: 4px; }
 
-.hero{flex:1;display:flex;align-items:center;padding:80px 1.5rem 40px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(255,255,255,0.03) 0%,transparent 70%);pointer-events:none}
-.hc{max-width:760px;margin:0 auto;width:100%;text-align:center;position:relative;z-index:1}
-.hero-ey{font-family:var(--brand);font-size:1rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--g2);margin-bottom:1.5rem;font-weight:600}
-.hero-ey span{color:var(--g1)}
-.hero h1{font-family:var(--brand);font-size:clamp(4rem,10vw,7rem);line-height:0.9;color:var(--white);text-transform:uppercase;letter-spacing:0.01em;margin-bottom:1.5rem;font-weight:700}
-.hero h1 .ol{-webkit-text-stroke:1.5px #fff;-webkit-text-fill-color:transparent;color:transparent}
-.hero-sub{font-size:1.08rem;color:var(--g1);max-width:540px;margin:0 auto 2.5rem;line-height:1.7}
-.hero-sub strong{color:var(--white);font-weight:600}
+    .draft-banner { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 12px; border-radius: 8px; margin-top: 10px; font-size: 13px; display: none; }
+    .draft-banner button { margin-top: 6px; margin-right: 6px; }
+    .save-flash { font-size: 11px; color: #6b7280; margin-top: 8px; min-height: 14px; }
 
-.cta{display:inline-flex;align-items:center;gap:10px;background:#fff;color:#000;padding:18px 40px;font-family:var(--brand);font-size:1.25rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;border:none;cursor:pointer;transition:all 0.3s;text-decoration:none}
-.cta:hover{background:#ddd;transform:translateY(-2px)}
-.cta-note{margin-top:0.9rem;font-size:0.72rem;color:var(--g3);letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+    /* Review step */
+    .review-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .review-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .review-table td:first-child { color: #6b7280; width: 40%; }
+    .review-missing { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 12px; margin: 10px 0; font-size: 13px; color: #991b1b; }
+    .review-missing button { margin-left: 8px; }
+    .review-ok { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 12px; margin: 10px 0; font-size: 13px; color: #065f46; font-weight: 600; }
 
-.info{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:4rem;border:1px solid var(--border)}
-.info-cell{background:var(--card);padding:1.75rem 1rem;text-align:center}
-.info-cell .lbl{font-size:0.62rem;color:var(--g3);text-transform:uppercase;letter-spacing:0.18em;margin-bottom:0.55rem;font-weight:700}
-.info-cell .val{font-family:var(--brand);color:var(--white);font-size:1.1rem;font-weight:600;line-height:1.2;letter-spacing:0.04em;text-transform:uppercase}
+    /* Policy cards — checkbox always visible in header, text collapsible via caret */
+    .policy-card { border: 1px solid #e5e7eb; border-radius: 10px; margin: 8px 0; overflow: hidden; }
+    .policy-card.acked { border-color: #a7f3d0; }
+    .policy-row { padding: 12px 14px; background: #f8fafc; display: flex; align-items: center; gap: 12px; }
+    .policy-row:hover { background: #eef2f7; }
+    .policy-card.acked .policy-row { background: #f0fdf4; }
+    .policy-check { flex-shrink: 0; display: flex; align-items: center; }
+    .policy-check input { width: 22px; height: 22px; margin: 0; cursor: pointer; }
+    .policy-title-wrap { flex: 1; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+    .policy-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .policy-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .caret { display: inline-block; width: 10px; transition: transform 0.15s; color: #64748b; font-size: 12px; }
+    .policy-card.open .caret { transform: rotate(90deg); }
+    .req { background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+    .read-hint { font-size: 11px; color: #1a4480; font-weight: 500; }
+    .policy-body { display: none; padding: 14px; border-top: 1px solid #e5e7eb; background: #fff; }
+    .policy-card.open .policy-body { display: block; }
+    .policy-text { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; line-height: 1.6; background: #f9fafb; padding: 12px; border-radius: 6px; max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; font-family: inherit; }
+    .ack-counter { text-align: center; padding: 10px; background: #eff6ff; border-radius: 8px; font-weight: 600; color: #1e40af; margin-top: 12px; }
+    .employer-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 8px 0; background: #fafafa; position: relative; }
+    .employer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .employer-head b { font-size: 14px; }
+    .emp-remove { background: none; border: none; color: #dc2626; font-size: 12px; cursor: pointer; font-weight: 600; padding: 2px 6px; }
+    .current-wrap { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+    .current-wrap input { width: 18px; height: 18px; }
+    .current-wrap label { margin: 0; font-weight: normal; }
 
-.footer{border-top:1px solid var(--border);padding:20px 1.5rem;font-size:0.72rem;color:var(--g3);text-align:center;letter-spacing:0.04em}
-.footer a{color:var(--g3);transition:color 0.3s}
-.footer a:hover{color:var(--white)}
-
-@media(max-width:600px){
-  .nav{padding:0 1rem;height:56px}
-  .nav .back{font-size:0.9rem}
-  .nav .call{padding:7px 14px;font-size:0.9rem}
-  .hero{padding:60px 1rem 30px}
-  .hero-ey{font-size:0.82rem;letter-spacing:0.18em;margin-bottom:1.1rem}
-  .hero h1{font-size:clamp(3.4rem,18vw,4.8rem)}
-  .hero-sub{font-size:1rem;margin-bottom:2rem}
-  .info{grid-template-columns:1fr;margin-top:2.5rem}
-  .info-cell{padding:1.25rem 1rem}
-  .cta{padding:15px 28px;width:100%;justify-content:center;font-size:1.1rem}
-}
-</style>
+    #fileChips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .file-chip { background: #e0e7ff; color: #1e3a8a; padding: 4px 10px; border-radius: 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .file-chip button { background: none; border: none; color: #1e3a8a; cursor: pointer; font-weight: 700; padding: 0; font-size: 13px; }
+  </style>
 </head>
 <body>
+<div class="wrap">
 
-<nav class="nav">
-  <a href="/" class="back">← iTow</a>
-  <a href="tel:8103945937" class="call">&#9742; (810) 394-5937</a>
-</nav>
+<!-- ===== HEADER + PROGRESS ===== -->
+<div class="card">
+  <h1>iTow Driver Application</h1>
+  <p class="sub">One section at a time — about 10 minutes total. Have your Driver's License and Medical Card handy.</p>
+  <div class="step-label" id="stepLabel">Step 1 of 7 — Your Info</div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="pills" id="stepPills"></div>
+  <div class="draft-banner" id="draftBanner">
+    <b>Welcome back!</b> We saved your progress from <span id="draftWhen"></span>.
+    (For your security, SSN, signature, and uploads are never saved and must be re-entered.)
+    <div>
+      <button type="button" class="secondary" onclick="resumeDraft()">Resume where I left off</button>
+      <button type="button" class="secondary" onclick="discardDraft()">Start fresh</button>
+    </div>
+  </div>
+</div>
 
-<section class="hero">
-  <div class="hc">
-    <div class="hero-ey">Now hiring &bull; Flint, MI &bull; <span>USDOT# 2573313</span></div>
-    <h1>Drive with<br><span class="ol">iTow.</span></h1>
-    <p class="hero-sub">
-      We're hiring <strong>CDL</strong> and <strong>Chauffeur-licensed</strong> drivers for our Flint-based tow and recovery fleet. Full-time, part-time, and flexible shifts available.
-    </p>
-    <a href="https://script.google.com/macros/s/AKfycbx26z_acNRXDiejblg7IjxK1N1yxyONxHK_9nguQZEp5CylhE51ofFiZ6LfyFRoj0lp6Q/exec"
-       target="_blank"
-       rel="noopener"
-       class="cta">
-      Start application &rarr;
-    </a>
-    <div class="cta-note">Takes ~10 minutes &bull; Secure form</div>
+<form id="appForm" novalidate>
 
-    <div class="info">
-      <div class="info-cell">
-        <div class="lbl">License</div>
-        <div class="val">CDL or MI Chauffeur</div>
+  <!-- ===== STEP 1: PERSONAL ===== -->
+  <div class="card step-panel" data-step="0">
+    <h2>1. Your Info</h2>
+    <div class="row">
+      <div>
+        <label for="firstName">First Name *</label>
+        <input id="firstName" autocomplete="given-name" required>
       </div>
-      <div class="info-cell">
-        <div class="lbl">Medical card</div>
-        <div class="val">Current &amp; valid</div>
+      <div>
+        <label for="lastName">Last Name *</label>
+        <input id="lastName" autocomplete="family-name" required>
       </div>
-      <div class="info-cell">
-        <div class="lbl">Driving record</div>
-        <div class="val">Clean, last 3 yrs</div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="phone">Phone *</label>
+        <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(810) 555-0123" required>
+      </div>
+      <div>
+        <label for="email">Email *</label>
+        <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="dob">Date of Birth *</label>
+        <input id="dob" type="date" autocomplete="bday" required>
+      </div>
+      <div>
+        <label for="ssn">Social Security Number *</label>
+        <input id="ssn" type="text" placeholder="XXX-XX-XXXX" maxlength="11" autocomplete="off" inputmode="numeric" required>
+        <div class="warn">🔒 Required for FMCSA Clearinghouse, I-9, and MVR. Stored securely and restricted to owner access. Never saved on this device.</div>
+      </div>
+    </div>
+    <div>
+      <label for="address">Street Address *</label>
+      <input id="address" autocomplete="street-address" required>
+    </div>
+    <div class="row3">
+      <div>
+        <label for="city">City *</label>
+        <input id="city" autocomplete="address-level2" required>
+      </div>
+      <div>
+        <label for="state">State *</label>
+        <input id="state" maxlength="2" value="MI" autocomplete="address-level1" style="text-transform:uppercase" required>
+      </div>
+      <div>
+        <label for="zip">Zip *</label>
+        <input id="zip" maxlength="10" inputmode="numeric" autocomplete="postal-code" required>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="preferredShift">Preferred Shift *</label>
+        <select id="preferredShift" required>
+          <option value="">Select…</option>
+          <option>Day</option><option>Night</option><option>Either</option>
+        </select>
+      </div>
+      <div>
+        <label for="shirtSize">Shirt Size <span class="note" style="display:inline">(optional — for your uniform)</span></label>
+        <select id="shirtSize">
+          <option value="">Select…</option>
+          <option>S</option>
+          <option>M</option>
+          <option>L</option>
+          <option>XL</option>
+          <option>2XL</option>
+          <option>3XL</option>
+          <option>4XL</option>
+        </select>
       </div>
     </div>
   </div>
-</section>
 
-<footer class="footer">
-  iTow and Servicetek LLC &bull; DOT# 2573313 &bull; MC# 1690083 &bull; <a href="/">itowtruck.com</a>
-</footer>
+  <!-- ===== STEP 2: LICENSE ===== -->
+  <div class="card step-panel" data-step="1">
+    <h2>2. Driver's License</h2>
+    <p class="sub">Copy these straight off your license — we verify against your MVR, so exact is best.</p>
+    <div class="row3">
+      <div>
+        <label for="licenseType">License Type *</label>
+        <select id="licenseType" required>
+          <option value="">Select…</option>
+          <option value="A">CDL Class A</option>
+          <option value="B">CDL Class B</option>
+          <option value="C">CDL Class C</option>
+          <option value="Chauffeur">Chauffeur</option>
+          <option value="Non-CDL">Non-CDL / Standard</option>
+        </select>
+      </div>
+      <div>
+        <label for="licenseNumber">License Number *</label>
+        <input id="licenseNumber" autocomplete="off" required>
+      </div>
+      <div>
+        <label for="licenseState">State *</label>
+        <input id="licenseState" value="MI" maxlength="2" style="text-transform:uppercase" required>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="licenseExp">License Expiration *</label>
+        <input id="licenseExp" type="date" required>
+      </div>
+      <div>
+        <label for="licenseSuspended">License Suspended/Revoked in last 5 years? *</label>
+        <select id="licenseSuspended" required>
+          <option value="">Select…</option>
+          <option>No</option><option>Yes</option>
+        </select>
+      </div>
+    </div>
+    <div id="suspendedExplainWrap" style="display:none">
+      <label for="licenseSuspendedExplain">Please explain the suspension/revocation *</label>
+      <textarea id="licenseSuspendedExplain" placeholder="What happened, when, and current status"></textarea>
+    </div>
+    <label for="violations3yr">Traffic violations in last 3 years *</label>
+    <textarea id="violations3yr" required placeholder="List each violation, or tap the button below if you have none"></textarea>
+    <span class="chip-btn" onclick="fillNone()">I have no violations — fill in "None"</span>
+  </div>
 
+  <!-- ===== STEP 3: MEDICAL + EXPERIENCE ===== -->
+  <div class="card step-panel" data-step="2">
+    <h2>3. Medical Card &amp; Experience</h2>
+    <p class="sub">Both fields below are optional — skip them if you don't have a med card yet.</p>
+    <div class="row">
+      <div>
+        <label for="medCardExp">Med Card Expiration</label>
+        <input id="medCardExp" type="date">
+      </div>
+      <div>
+        <label for="medExaminerNumber">Medical Examiner National Registry #</label>
+        <input id="medExaminerNumber">
+        <div class="note">Printed on your medical certificate, usually near the examiner's signature.</div>
+      </div>
+    </div>
+    <label for="experienceNotes">Towing/driving experience notes</label>
+    <textarea id="experienceNotes" placeholder="Years of experience, types of equipment, heavy recovery, etc."></textarea>
+  </div>
+
+  <!-- ===== STEP 4: EMPLOYMENT HISTORY ===== -->
+  <div class="card step-panel" data-step="3">
+    <h2>4. Employment History (last 3 years)</h2>
+    <div class="sub">Federal rules (49 CFR 391.21) require your work history for the last 3 years — include every job, and note any gaps (unemployment, school) in the "Reason for leaving" of the job before the gap.</div>
+    <div id="employers"></div>
+    <button type="button" class="secondary" onclick="addEmployer()">+ Add Another Employer</button>
+  </div>
+
+  <!-- ===== STEP 5: UPLOADS ===== -->
+  <div class="card step-panel" data-step="4">
+    <h2>5. Upload Documents</h2>
+    <p class="sub">On your phone? You can take a photo right from here. JPG, PNG, or PDF, max 20 MB each. You can also skip this and bring documents to your interview.</p>
+    <label for="dlFile">Driver's License (photo or PDF)</label>
+    <input id="dlFile" type="file" accept=".jpg,.jpeg,.png,.pdf">
+    <label for="medFile">Medical Examiner's Certificate</label>
+    <input id="medFile" type="file" accept=".jpg,.jpeg,.png,.pdf">
+    <label for="extraFile">Other (resume, certifications — optional)</label>
+    <input id="extraFile" type="file" accept=".jpg,.jpeg,.png,.pdf">
+    <div id="fileChips"></div>
+  </div>
+
+  <!-- ===== STEP 6: POLICIES ===== -->
+  <div class="card step-panel" data-step="5">
+    <h2>6. Company Policies</h2>
+    <p class="sub">Check each box to confirm you've read and agree to the policy. Tap a policy name to expand and read the full text — you'll get a signed PDF copy of everything after you submit.</p>
+    <div id="policyList"></div>
+    <div class="ack-counter"><span id="ackCount">0</span> of <span id="ackTotal">0</span> required policies acknowledged</div>
+  </div>
+
+  <!-- ===== STEP 7: REVIEW + SIGNATURE + SUBMIT ===== -->
+  <div class="card step-panel" data-step="6">
+    <h2>7. Review &amp; Sign</h2>
+    <div id="reviewSummary"></div>
+    <h2 style="margin-top:18px">Electronic Signature</h2>
+    <p class="sub">Typing your name below is your legal electronic signature for this application and all policies acknowledged above.</p>
+    <label for="signatureName">Full Legal Name *</label>
+    <input id="signatureName" required placeholder="Jane Q. Public" autocomplete="off">
+    <div class="field-warn" id="sigWarn" style="display:none"></div>
+    <button type="button" class="primary" id="submitBtn" onclick="submitApp()" disabled style="width:100%;margin-top:16px">Submit Application</button>
+    <div id="msg"></div>
+  </div>
+
+  <!-- ===== NAV ===== -->
+  <div class="card">
+    <div id="stepErrors"></div>
+    <div class="nav-row">
+      <button type="button" class="ghost" id="backBtn" onclick="goBack()">← Back</button>
+      <div class="spacer"></div>
+      <button type="button" class="primary" id="nextBtn" onclick="goNext()">Next →</button>
+    </div>
+    <div class="save-flash" id="saveFlash"></div>
+  </div>
+
+</form>
+
+</div>
+
+<script>
+  // ===== SERVER-INJECTED =====
+  const POLICIES = <?!= JSON.stringify(policies) ?>;
+  const POLICY_VERSION = <?!= JSON.stringify(policyVersion) ?>;
+  const REQUIRED_IDS = POLICIES.filter(p => p.required).map(p => p.id);
+
+  // ===== STATE =====
+  const clientToken = _uuid();
+  const ackState = {};   // { policyId: accepted_at }
+  let submitting = false;
+  let submittedOk = false;
+
+  // ===== WIZARD STATE =====
+  const STEP_TITLES = ['Your Info', "License", 'Medical', 'Work History', 'Documents', 'Policies', 'Review & Sign'];
+  const TOTAL_STEPS = STEP_TITLES.length;
+  let currentStep = 0;
+  let maxStepReached = 0;
+
+  // ===== AUTOSAVE =====
+  // SSN, signature, file uploads, and policy acknowledgments are deliberately
+  // NEVER saved to the device. Everything else restores if they come back.
+  const DRAFT_KEY = 'itow_driver_app_draft_v1';
+  const SAVE_IDS = ['firstName','lastName','phone','email','dob','address','city','state','zip',
+                    'preferredShift','shirtSize',
+                    'licenseType','licenseNumber','licenseState','licenseExp',
+                    'licenseSuspended','licenseSuspendedExplain','violations3yr',
+                    'medCardExp','medExaminerNumber','experienceNotes'];
+  let pendingDraft = null;
+  let saveTimer = null;
+
+  // ===== INIT =====
+  document.getElementById('ackTotal').textContent = REQUIRED_IDS.length;
+  renderPolicies();
+  addEmployer();  // 1 employer block by default
+  initDobLimit();
+  initDraft();
+  renderPills();
+  showStep(0);
+
+  // ===== FORMATTERS =====
+  document.getElementById('ssn').addEventListener('input', function(e) {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 9);
+    if (v.length > 5) v = v.slice(0,3) + '-' + v.slice(3,5) + '-' + v.slice(5);
+    else if (v.length > 3) v = v.slice(0,3) + '-' + v.slice(3);
+    e.target.value = v;
+    checkGate();
+  });
+
+  document.getElementById('phone').addEventListener('input', function(e) {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 10);
+    if (v.length > 6) v = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
+    else if (v.length > 3) v = '(' + v.slice(0,3) + ') ' + v.slice(3);
+    else if (v.length > 0) v = '(' + v;
+    e.target.value = v;
+    checkGate();
+  });
+
+  ['state','licenseState'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function(e) {
+      e.target.value = e.target.value.toUpperCase();
+    });
+  });
+
+  // Conditional: suspension explanation only when "Yes"
+  document.getElementById('licenseSuspended').addEventListener('change', syncSuspendedExplain);
+  function syncSuspendedExplain() {
+    const yes = document.getElementById('licenseSuspended').value === 'Yes';
+    document.getElementById('suspendedExplainWrap').style.display = yes ? 'block' : 'none';
+    if (!yes) {
+      document.getElementById('licenseSuspendedExplain').value = '';
+      setFieldError('licenseSuspendedExplain', '');
+    }
+  }
+
+  function fillNone() {
+    document.getElementById('violations3yr').value = 'None';
+    setFieldError('violations3yr', '');
+    checkGate();
+    scheduleSave();
+  }
+
+  function initDobLimit() {
+    // Can't apply before turning 18 — set a sensible max on the date picker
+    const t = new Date();
+    const max = new Date(t.getFullYear() - 18, t.getMonth(), t.getDate());
+    document.getElementById('dob').max = max.toISOString().slice(0, 10);
+  }
+
+  // Signature: warn (don't block) if the typed name doesn't match First + Last
+  document.getElementById('signatureName').addEventListener('input', function() {
+    const sigTokens = norm(this.value).split(' ').filter(Boolean);
+    const first = norm(document.getElementById('firstName').value);
+    const last = norm(document.getElementById('lastName').value);
+    const warnEl = document.getElementById('sigWarn');
+    if (sigTokens.length && first && last && (sigTokens.indexOf(first) === -1 || sigTokens.indexOf(last) === -1)) {
+      warnEl.textContent = 'Heads up: this doesn\'t match the name you entered in step 1 (' +
+        document.getElementById('firstName').value + ' ' + document.getElementById('lastName').value +
+        '). That\'s OK if this is your full legal name — just double-check it.';
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+    checkGate();
+  });
+  function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z]/g, ' ').trim().replace(/\s+/g, ' '); }
+
+  // ===== WIZARD NAV =====
+  function renderPills() {
+    const host = document.getElementById('stepPills');
+    host.innerHTML = STEP_TITLES.map((t, i) => {
+      let cls = 'pill';
+      if (i === currentStep) cls += ' now';
+      else if (i <= maxStepReached) cls += ' done';
+      const click = (i <= maxStepReached && i !== currentStep) ? ` onclick="jumpTo(${i})"` : '';
+      return `<span class="${cls}"${click}>${i + 1}. ${esc(t)}</span>`;
+    }).join('');
+  }
+
+  function showStep(i) {
+    currentStep = i;
+    if (i > maxStepReached) maxStepReached = i;
+    document.querySelectorAll('.step-panel').forEach(p => {
+      p.classList.toggle('active', Number(p.dataset.step) === i);
+    });
+    document.getElementById('stepLabel').textContent =
+      'Step ' + (i + 1) + ' of ' + TOTAL_STEPS + ' — ' + STEP_TITLES[i];
+    document.getElementById('progressFill').style.width = Math.round(((i + 1) / TOTAL_STEPS) * 100) + '%';
+    document.getElementById('backBtn').style.visibility = i === 0 ? 'hidden' : 'visible';
+    document.getElementById('nextBtn').style.display = i === TOTAL_STEPS - 1 ? 'none' : 'inline-block';
+    document.getElementById('stepErrors').innerHTML = '';
+    renderPills();
+    if (i === TOTAL_STEPS - 1) buildReview();
+    checkGate();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function goBack() { if (currentStep > 0) showStep(currentStep - 1); }
+
+  function goNext() {
+    const errs = validateStep(currentStep);
+    if (errs.length) {
+      renderStepErrors(errs);
+      const first = document.getElementById(errs[0].id);
+      if (first) { first.focus(); first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      return;
+    }
+    showStep(currentStep + 1);
+    scheduleSave();
+  }
+
+  function jumpTo(i) {
+    if (i <= maxStepReached) showStep(i);
+  }
+
+  function renderStepErrors(errs) {
+    document.getElementById('stepErrors').innerHTML =
+      '<div class="error"><b>Almost — ' + errs.length + ' thing' + (errs.length > 1 ? 's' : '') +
+      ' to fix on this step:</b>' +
+      errs.map(e => '· ' + esc(e.msg)).join('<br>') + '</div>';
+  }
+
+  // ===== VALIDATION =====
+  function setFieldError(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let err = el.parentElement.querySelector('.field-err[data-for="' + id + '"]');
+    if (!msg) {
+      if (err) err.remove();
+      el.classList.remove('invalid');
+      return;
+    }
+    if (!err) {
+      err = document.createElement('div');
+      err.className = 'field-err';
+      err.setAttribute('data-for', id);
+      el.insertAdjacentElement('afterend', err);
+    }
+    err.textContent = msg;
+    el.classList.add('invalid');
+  }
+
+  function req(id, label, errs) {
+    const v = document.getElementById(id).value;
+    if (!v || !String(v).trim()) {
+      errs.push({ id: id, msg: label + ' is required' });
+      setFieldError(id, label + ' is required');
+      return false;
+    }
+    setFieldError(id, '');
+    return true;
+  }
+
+  function validateStep(step) {
+    const errs = [];
+    if (step === 0) {
+      req('firstName', 'First name', errs);
+      req('lastName', 'Last name', errs);
+      if (req('phone', 'Phone', errs)) {
+        const digits = document.getElementById('phone').value.replace(/\D/g, '');
+        if (digits.length !== 10) {
+          errs.push({ id: 'phone', msg: 'Phone must be 10 digits' });
+          setFieldError('phone', 'Please enter a 10-digit phone number');
+        }
+      }
+      if (req('email', 'Email', errs)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('email').value.trim())) {
+          errs.push({ id: 'email', msg: 'Email doesn\'t look right' });
+          setFieldError('email', 'That email doesn\'t look right — check for typos');
+        }
+      }
+      req('dob', 'Date of birth', errs);
+      if (req('ssn', 'SSN', errs)) {
+        if (!/^\d{3}-\d{2}-\d{4}$/.test(document.getElementById('ssn').value)) {
+          errs.push({ id: 'ssn', msg: 'SSN must be 9 digits' });
+          setFieldError('ssn', 'SSN must be 9 digits (XXX-XX-XXXX)');
+        }
+      }
+      req('address', 'Street address', errs);
+      req('city', 'City', errs);
+      req('state', 'State', errs);
+      req('zip', 'Zip', errs);
+      req('preferredShift', 'Preferred shift', errs);
+    }
+    if (step === 1) {
+      req('licenseType', 'License type', errs);
+      req('licenseNumber', 'License number', errs);
+      req('licenseState', 'License state', errs);
+      if (req('licenseExp', 'License expiration', errs)) {
+        const exp = document.getElementById('licenseExp').value;
+        if (exp && exp < new Date().toISOString().slice(0, 10)) {
+          // Non-blocking warning — they may be mid-renewal
+          setFieldError('licenseExp', '');
+          showFieldWarn('licenseExp', 'This date is in the past — if your license is expired, mention your renewal status in the experience notes.');
+        } else {
+          clearFieldWarn('licenseExp');
+        }
+      }
+      req('licenseSuspended', 'Suspension question', errs);
+      if (document.getElementById('licenseSuspended').value === 'Yes') {
+        req('licenseSuspendedExplain', 'Suspension explanation', errs);
+      }
+      req('violations3yr', 'Traffic violations (write "None" if you have none)', errs);
+    }
+    if (step === 5) {
+      const missing = REQUIRED_IDS.filter(id => !ackState[id]);
+      if (missing.length) {
+        errs.push({ id: 'policyList', msg: missing.length + ' required polic' + (missing.length > 1 ? 'ies' : 'y') + ' still need' + (missing.length > 1 ? '' : 's') + ' your acknowledgment' });
+      }
+    }
+    // Steps 2, 3, 4 are optional — always pass.
+    return errs;
+  }
+
+  function showFieldWarn(id, msg) {
+    const el = document.getElementById(id);
+    let w = el.parentElement.querySelector('.field-warn[data-for="' + id + '"]');
+    if (!w) {
+      w = document.createElement('div');
+      w.className = 'field-warn';
+      w.setAttribute('data-for', id);
+      el.insertAdjacentElement('afterend', w);
+    }
+    w.textContent = msg;
+  }
+  function clearFieldWarn(id) {
+    const el = document.getElementById(id);
+    const w = el.parentElement.querySelector('.field-warn[data-for="' + id + '"]');
+    if (w) w.remove();
+  }
+
+  // ===== POLICY VIEWER =====
+  function renderPolicies() {
+    const host = document.getElementById('policyList');
+    host.innerHTML = POLICIES.map(p => `
+      <div class="policy-card" data-pid="${p.id}">
+        <div class="policy-row">
+          <label class="policy-check" onclick="event.stopPropagation()">
+            <input type="checkbox" onchange="toggleAck('${p.id}', this.checked)" aria-label="Acknowledge ${esc(p.name)}">
+          </label>
+          <div class="policy-title-wrap" onclick="togglePolicy('${p.id}')">
+            <div>
+              <div class="policy-title">
+                <span class="caret">▸</span>
+                <span>I acknowledge I have read and agree to the <b>${esc(p.name)}</b>${p.required ? ' <span class="req">REQUIRED</span>' : ''}</span>
+              </div>
+              <div class="policy-meta">
+                <span class="read-hint">▸ Tap to read policy</span> &nbsp;·&nbsp; v${esc(POLICY_VERSION)}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="policy-body">
+          <pre class="policy-text">${esc(p.body)}</pre>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function togglePolicy(id) {
+    const card = document.querySelector('.policy-card[data-pid="'+id+'"]');
+    if (card) card.classList.toggle('open');
+  }
+
+  function toggleAck(id, checked) {
+    if (checked) ackState[id] = new Date().toISOString();
+    else delete ackState[id];
+    const card = document.querySelector('.policy-card[data-pid="'+id+'"]');
+    if (card) card.classList.toggle('acked', !!checked);
+    const ackedReq = REQUIRED_IDS.filter(r => ackState[r]).length;
+    document.getElementById('ackCount').textContent = ackedReq;
+    if (ackedReq === REQUIRED_IDS.length) document.getElementById('stepErrors').innerHTML = '';
+    checkGate();
+  }
+
+  // ===== EMPLOYERS =====
+  function addEmployer(prefill) {
+    const host = document.getElementById('employers');
+    const block = document.createElement('div');
+    block.className = 'employer-block';
+    block.innerHTML = `
+      <div class="employer-head">
+        <b class="emp-num"></b>
+        <button type="button" class="emp-remove" onclick="removeEmployer(this)">✕ Remove</button>
+      </div>
+      <div class="row">
+        <div><label>Company</label><input class="emp-company"></div>
+        <div><label>Position</label><input class="emp-position"></div>
+      </div>
+      <div class="row">
+        <div><label>Phone</label><input class="emp-phone" type="tel" inputmode="numeric"></div>
+        <div><label>Reason for leaving</label><input class="emp-reason"></div>
+      </div>
+      <div class="row">
+        <div><label>From</label><input class="emp-from" type="date"></div>
+        <div>
+          <label>To</label><input class="emp-to" type="date">
+          <div class="current-wrap">
+            <input type="checkbox" class="emp-current" onchange="toggleCurrent(this)">
+            <label>I still work here</label>
+          </div>
+        </div>
+      </div>
+    `;
+    host.appendChild(block);
+    if (prefill) {
+      block.querySelector('.emp-company').value = prefill.company || '';
+      block.querySelector('.emp-position').value = prefill.position || '';
+      block.querySelector('.emp-phone').value = prefill.phone || '';
+      block.querySelector('.emp-reason').value = prefill.reason || '';
+      block.querySelector('.emp-from').value = prefill.from || '';
+      block.querySelector('.emp-to').value = prefill.to || '';
+      if (prefill.current) {
+        block.querySelector('.emp-current').checked = true;
+        toggleCurrent(block.querySelector('.emp-current'));
+      }
+    }
+    renumberEmployers();
+  }
+
+  function removeEmployer(btn) {
+    const host = document.getElementById('employers');
+    if (host.children.length <= 1) {
+      // Keep at least one block; just clear it
+      const b = btn.closest('.employer-block');
+      b.querySelectorAll('input').forEach(i => { if (i.type === 'checkbox') i.checked = false; else i.value = ''; });
+      b.querySelector('.emp-to').disabled = false;
+    } else {
+      btn.closest('.employer-block').remove();
+    }
+    renumberEmployers();
+    scheduleSave();
+  }
+
+  function renumberEmployers() {
+    document.querySelectorAll('.employer-block').forEach((b, i) => {
+      b.querySelector('.emp-num').textContent = 'Employer ' + (i + 1);
+    });
+  }
+
+  function toggleCurrent(cb) {
+    const to = cb.closest('.employer-block').querySelector('.emp-to');
+    to.disabled = cb.checked;
+    if (cb.checked) to.value = '';
+    scheduleSave();
+  }
+
+  function collectEmployers() {
+    const blocks = document.querySelectorAll('.employer-block');
+    return Array.from(blocks).map(b => ({
+      company: b.querySelector('.emp-company').value.trim(),
+      position: b.querySelector('.emp-position').value.trim(),
+      phone: b.querySelector('.emp-phone').value.trim(),
+      from: b.querySelector('.emp-from').value,
+      to: b.querySelector('.emp-current').checked ? 'Present' : b.querySelector('.emp-to').value,
+      reason: b.querySelector('.emp-reason').value.trim()
+    })).filter(e => e.company);
+  }
+
+  function collectEmployersForDraft() {
+    const blocks = document.querySelectorAll('.employer-block');
+    return Array.from(blocks).map(b => ({
+      company: b.querySelector('.emp-company').value.trim(),
+      position: b.querySelector('.emp-position').value.trim(),
+      phone: b.querySelector('.emp-phone').value.trim(),
+      from: b.querySelector('.emp-from').value,
+      to: b.querySelector('.emp-to').value,
+      reason: b.querySelector('.emp-reason').value.trim(),
+      current: b.querySelector('.emp-current').checked
+    }));
+  }
+
+  // ===== FILES =====
+  const MAX_FILE_MB = 20;
+  ['dlFile','medFile','extraFile'].forEach(id => {
+    document.getElementById(id).addEventListener('change', function() {
+      const f = this.files[0];
+      if (f && f.size > MAX_FILE_MB * 1024 * 1024) {
+        setFieldError(id, 'That file is ' + Math.round(f.size / 1024 / 1024) + ' MB — max is ' + MAX_FILE_MB + ' MB. Try a photo instead of a scan.');
+        this.value = '';
+      } else {
+        setFieldError(id, '');
+      }
+      renderFileChips();
+    });
+  });
+
+  function renderFileChips() {
+    const host = document.getElementById('fileChips');
+    host.innerHTML = '';
+    const labels = { dlFile: "Driver's License", medFile: 'Med Card', extraFile: 'Other' };
+    ['dlFile','medFile','extraFile'].forEach(id => {
+      const f = document.getElementById(id).files[0];
+      if (f) {
+        const chip = document.createElement('div');
+        chip.className = 'file-chip';
+        const span = document.createElement('span');
+        span.textContent = labels[id] + ': ' + f.name + ' (' + Math.round(f.size/1024) + ' KB)';
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '✕';
+        x.setAttribute('aria-label', 'Remove ' + f.name);
+        x.onclick = function() {
+          document.getElementById(id).value = '';
+          renderFileChips();
+        };
+        chip.appendChild(span);
+        chip.appendChild(x);
+        host.appendChild(chip);
+      }
+    });
+  }
+
+  // ===== AUTOSAVE =====
+  function initDraft() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (!d || !d.fields) return;
+      pendingDraft = d;
+      document.getElementById('draftWhen').textContent = d.savedAt ? new Date(d.savedAt).toLocaleString() : 'earlier';
+      document.getElementById('draftBanner').style.display = 'block';
+    } catch (e) { /* localStorage unavailable — degrade silently */ }
+  }
+
+  function resumeDraft() {
+    if (!pendingDraft) return;
+    const d = pendingDraft;
+    SAVE_IDS.forEach(id => {
+      if (d.fields[id] != null) document.getElementById(id).value = d.fields[id];
+    });
+    if (Array.isArray(d.employers) && d.employers.length) {
+      document.getElementById('employers').innerHTML = '';
+      d.employers.forEach(e => addEmployer(e));
+    }
+    syncSuspendedExplain();
+    const step = Math.min(Math.max(Number(d.step) || 0, 0), TOTAL_STEPS - 1);
+    maxStepReached = step;
+    document.getElementById('draftBanner').style.display = 'none';
+    pendingDraft = null;
+    showStep(step);
+  }
+
+  function discardDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    pendingDraft = null;
+    document.getElementById('draftBanner').style.display = 'none';
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 600);
+  }
+
+  function saveDraft() {
+    if (submittedOk) return;
+    try {
+      const fields = {};
+      SAVE_IDS.forEach(id => { fields[id] = document.getElementById(id).value; });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        step: currentStep,
+        fields: fields,
+        employers: collectEmployersForDraft()
+      }));
+      const flash = document.getElementById('saveFlash');
+      flash.textContent = '✓ Progress saved on this device (SSN, signature & uploads are never saved)';
+      clearTimeout(flash._t);
+      flash._t = setTimeout(() => { flash.textContent = ''; }, 2500);
+    } catch (e) { /* private browsing etc. — fine */ }
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  }
+
+  // ===== SUBMIT GATE =====
+  document.getElementById('appForm').addEventListener('input', function() { checkGate(); scheduleSave(); });
+  document.getElementById('appForm').addEventListener('change', function() { checkGate(); scheduleSave(); });
+
+  function checkGate() {
+    const btn = document.getElementById('submitBtn');
+    const required = ['firstName','lastName','phone','email','ssn','dob',
+                      'address','city','state','zip','preferredShift',
+                      'licenseType','licenseNumber','licenseState','licenseExp',
+                      'licenseSuspended','violations3yr','signatureName'];
+    const allFilled = required.every(id => {
+      const v = document.getElementById(id).value;
+      return v && String(v).trim().length > 0;
+    });
+    const allAcked = REQUIRED_IDS.every(id => ackState[id]);
+    const ssnValid = /^\d{3}-\d{2}-\d{4}$/.test(document.getElementById('ssn').value);
+    btn.disabled = !(allFilled && allAcked && ssnValid) || submitting || submittedOk;
+  }
+
+  // ===== REVIEW =====
+  function buildReview() {
+    const g = id => document.getElementById(id).value;
+    const host = document.getElementById('reviewSummary');
+
+    // What's missing?
+    const missing = [];
+    const requiredMap = [
+      { id: 'firstName', label: 'First name', step: 0 }, { id: 'lastName', label: 'Last name', step: 0 },
+      { id: 'phone', label: 'Phone', step: 0 }, { id: 'email', label: 'Email', step: 0 },
+      { id: 'dob', label: 'Date of birth', step: 0 }, { id: 'ssn', label: 'SSN', step: 0 },
+      { id: 'address', label: 'Street address', step: 0 }, { id: 'city', label: 'City', step: 0 },
+      { id: 'state', label: 'State', step: 0 }, { id: 'zip', label: 'Zip', step: 0 },
+      { id: 'preferredShift', label: 'Preferred shift', step: 0 },
+      { id: 'licenseType', label: 'License type', step: 1 }, { id: 'licenseNumber', label: 'License number', step: 1 },
+      { id: 'licenseState', label: 'License state', step: 1 }, { id: 'licenseExp', label: 'License expiration', step: 1 },
+      { id: 'licenseSuspended', label: 'Suspension question', step: 1 },
+      { id: 'violations3yr', label: 'Traffic violations', step: 1 }
+    ];
+    requiredMap.forEach(f => {
+      if (!String(g(f.id) || '').trim()) missing.push(f);
+    });
+    if (!/^\d{3}-\d{2}-\d{4}$/.test(g('ssn'))) {
+      if (!missing.some(m => m.id === 'ssn')) missing.push({ id: 'ssn', label: 'SSN (needs all 9 digits)', step: 0 });
+    }
+    const missingAcks = REQUIRED_IDS.filter(id => !ackState[id]);
+    if (missingAcks.length) {
+      missing.push({ id: 'policyList', label: missingAcks.length + ' policy acknowledgment' + (missingAcks.length > 1 ? 's' : ''), step: 5 });
+    }
+
+    let html = '';
+    if (missing.length) {
+      html += '<div class="review-missing"><b>Before you can submit, please complete:</b><br>' +
+        missing.map(m => '· ' + esc(m.label) +
+          ' <button type="button" class="secondary" onclick="jumpTo(' + m.step + ')">Go fix</button>').join('<br>') +
+        '</div>';
+    } else {
+      html += '<div class="review-ok">✓ Everything required is complete. Review below, sign, and submit.</div>';
+    }
+
+    const ssnVal = g('ssn');
+    const ssnMasked = ssnVal ? ssnVal.replace(/^\d{3}-?\d{2}-?/, 'XXX-XX-') : '—';
+    const emps = collectEmployers();
+    const files = ['dlFile','medFile','extraFile']
+      .map(id => document.getElementById(id).files[0])
+      .filter(Boolean).map(f => f.name);
+
+    html += '<table class="review-table">' +
+      rrow('Name', (g('firstName') + ' ' + g('lastName')).trim()) +
+      rrow('Phone / Email', [g('phone'), g('email')].filter(Boolean).join(' · ')) +
+      rrow('DOB', g('dob')) +
+      rrow('SSN', ssnMasked) +
+      rrow('Address', [g('address'), g('city'), g('state'), g('zip')].filter(Boolean).join(', ')) +
+      rrow('Shift / Shirt', [g('preferredShift'), g('shirtSize')].filter(Boolean).join(' · ')) +
+      rrow('License', [licLabel(g('licenseType')), g('licenseNumber'), g('licenseState'), g('licenseExp') ? 'exp ' + g('licenseExp') : ''].filter(Boolean).join(' · ')) +
+      rrow('Suspended (5yr)', g('licenseSuspended') + (g('licenseSuspendedExplain') ? ' — ' + g('licenseSuspendedExplain') : '')) +
+      rrow('Violations (3yr)', g('violations3yr')) +
+      rrow('Med card', [g('medCardExp') ? 'exp ' + g('medCardExp') : '', g('medExaminerNumber')].filter(Boolean).join(' · ') || '(not provided)') +
+      rrow('Employers', emps.length ? emps.map(e => e.company).join(', ') : '(none listed)') +
+      rrow('Documents', files.length ? files.join(', ') : '(none uploaded)') +
+      rrow('Policies', Object.keys(ackState).length + ' acknowledged (v' + esc(POLICY_VERSION) + ')') +
+      '</table>';
+
+    host.innerHTML = html;
+  }
+
+  function rrow(k, v) {
+    return '<tr><td>' + esc(k) + '</td><td>' + esc(v || '—') + '</td></tr>';
+  }
+
+  function licLabel(v) {
+    const m = { A: 'CDL Class A', B: 'CDL Class B', C: 'CDL Class C' };
+    return m[v] || v;
+  }
+
+  // ===== SUBMIT =====
+  async function submitApp() {
+    if (submitting || submittedOk) return;
+    submitting = true;
+
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg');
+    btn.disabled = true;
+    btn.textContent = 'Uploading… do not close this page';
+    msg.className = ''; msg.textContent = '';
+
+    const firstName = document.getElementById('firstName').value.trim();
+    const lastName = document.getElementById('lastName').value.trim();
+    const fullName = (firstName + ' ' + lastName).trim();
+
+    const payload = {
+      clientToken: clientToken,
+      firstName, lastName, fullName,
+      phone: document.getElementById('phone').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      ssn: document.getElementById('ssn').value.trim(),
+      dob: document.getElementById('dob').value,
+      address: document.getElementById('address').value.trim(),
+      city: document.getElementById('city').value.trim(),
+      state: document.getElementById('state').value.trim().toUpperCase(),
+      zip: document.getElementById('zip').value.trim(),
+      preferredShift: document.getElementById('preferredShift').value,
+      shirtSize: document.getElementById('shirtSize').value,
+      experienceNotes: document.getElementById('experienceNotes').value.trim(),
+      licenseType: document.getElementById('licenseType').value,
+      licenseNumber: document.getElementById('licenseNumber').value.trim(),
+      licenseState: document.getElementById('licenseState').value.trim().toUpperCase(),
+      licenseExp: document.getElementById('licenseExp').value,
+      licenseSuspended: document.getElementById('licenseSuspended').value,
+      licenseSuspendedExplain: document.getElementById('licenseSuspendedExplain').value.trim(),
+      violations3yr: document.getElementById('violations3yr').value.trim(),
+      medCardExp: document.getElementById('medCardExp').value,
+      medExaminerNumber: document.getElementById('medExaminerNumber').value.trim(),
+      employers: collectEmployers(),
+      policyAcks: Object.keys(ackState).map(id => ({ policyId: id, accepted_at: ackState[id] })),
+      signatureName: document.getElementById('signatureName').value.trim(),
+      userAgent: navigator.userAgent,
+      files: {}
+    };
+
+    try {
+      const dl = document.getElementById('dlFile').files[0];
+      const med = document.getElementById('medFile').files[0];
+      const extra = document.getElementById('extraFile').files[0];
+      if (dl) payload.files.dl = await fileToBase64(dl);
+      if (med) payload.files.med = await fileToBase64(med);
+      if (extra) payload.files.extra = await fileToBase64(extra);
+    } catch (e) {
+      submitting = false;
+      btn.disabled = false;
+      btn.textContent = 'Submit Application';
+      msg.className = 'error';
+      msg.textContent = 'File read failed: ' + e.message;
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onFailure)
+      .submitApplication(payload);
+  }
+
+  function onSuccess(res) {
+    submitting = false;
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg');
+    if (res && res.ok) {
+      submittedOk = true;
+      clearDraft();
+      btn.textContent = '✓ Submitted';
+      msg.className = 'success';
+      msg.innerHTML = 'Thanks! Submitted. Reference ID: <b>' + esc(res.applicantId) + '</b><br>' +
+                      '<a href="' + esc(res.applicationPdfUrl) + '" target="_blank">View Application PDF</a>';
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Submit Application';
+      msg.className = 'error';
+      msg.textContent = (res && res.error) ? res.error : 'Unknown error';
+    }
+  }
+
+  function onFailure(err) {
+    submitting = false;
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg');
+    btn.disabled = false;
+    btn.textContent = 'Submit Application';
+    msg.className = 'error';
+    msg.textContent = (err && err.message) ? err.message : String(err);
+  }
+
+  function fileToBase64(file) {
+    if (!file) return null;
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const result = r.result;
+        const base64 = String(result).split(',')[1];
+        resolve({
+          data: base64,
+          mime: file.type,
+          ext: (file.name.split('.').pop() || '').toLowerCase(),
+          name: file.name
+        });
+      };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function _uuid() {
+    return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+</script>
 </body>
 </html>
