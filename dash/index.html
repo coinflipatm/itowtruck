@@ -70,6 +70,7 @@
   .tcard.st-EXTRA{border-left-color:var(--amber);background:#fffaf2}
   .tcard.st-OFF{border-left-color:#d5dae4;opacity:.65}
   .tcard.st-MISSED{border-left-color:var(--red);background:#faf5f5;opacity:.85}
+  .tcard.st-CALLIN{border-left-color:#8e5bd4;background:#f8f4fd}
   .tcard .sched{font-size:13px;color:var(--mut)}
   .tcard .act{font-size:13px;margin-top:3px}
   .tcard .act b{font-weight:700}
@@ -290,6 +291,7 @@ var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleuserco
 // false = original behavior: session + cached data survive refreshes
 //         within the same tab; fresh opens still require a tap.
 var FORCE_LOGIN = false;
+var FE_VERSION = '3.9';   // shown in the footer next to the server's
 
 /* ======================================================== */
 
@@ -456,7 +458,7 @@ function loadInit(force, quiet){
 
 function renderFoot(stale){
   var f=$('foot'); if(!f||!HEALTH)return;
-  f.innerHTML='<b>TowOS v'+esc(HEALTH.version)+'</b> \u00b7 data '+
+  f.innerHTML='<b>TowOS srv '+esc(HEALTH.version)+' \u00b7 fe '+FE_VERSION+'</b> \u00b7 data '+
     (stale?'<span class="stale">as of '+esc(HEALTH.generatedAt)+' (refreshing\u2026)</span>'
           :'as of '+esc(HEALTH.generatedAt))+
     (HEALTH.cached?' \u26a1':'')+
@@ -515,6 +517,7 @@ function renderToday(){
     ['ON','On the clock'],
     ['LATE','No punch \u2014 past start'],
     ['MISSED','No-shows (marked missed)'],
+    ['CALLIN','Call-ins'],
     ['SOON','Coming up'],
     ['DONE','Done today'],
     ['EXTRA','Unscheduled punches'],
@@ -539,6 +542,7 @@ function todayCard(r){
   else if(r.state==='DONE')chip='<span class="chip">'+(r.hours?r.hours+'h':'done')+'</span>';
   else if(r.state==='EXTRA')chip='<span class="chip amber">unscheduled</span>';
   else if(r.state==='MISSED')chip='<span class="chip warn">no-show</span>';
+  else if(r.state==='CALLIN')chip='<span class="chip" style="background:#f0e7fb;color:#6b3fb0">called in</span>';
   else chip='<span class="chip dim">OFF</span>';
 
   var sched=r.schedStart
@@ -555,6 +559,8 @@ function todayCard(r){
     act='<b style="color:var(--red)">No punch yet</b>';
   } else if(r.state==='MISSED'){
     act='<b style="color:var(--red)">Marked missed</b> \u00b7 0h';
+  } else if(r.state==='CALLIN'){
+    act='<b style="color:#6b3fb0">Called in</b>'+(r.offReason?' \u00b7 '+esc(r.offReason):'');
   } else if(r.state==='SOON'){
     act='Starts '+fmtT(r.schedStart);
   } else if(r.off&&r.offReason){
@@ -575,53 +581,72 @@ function openTodayAction(r){
   if(r.schedStart)meta.push('Sched '+fmtT(r.schedStart)+'\u2013'+fmtT(r.schedEnd)+(r.schedOvernight?' +1d':''));
   if(r.inT)meta.push('In '+fmtT(r.inT)+(r.sinceYesterday?' (yest)':''));
   if(r.outT)meta.push('Out '+fmtT(r.outT));
-  if(r.off)meta.push('OFF'+(r.offReason?': '+r.offReason:''));
+  if(r.state==='CALLIN')meta.push('Called in'+(r.offReason?': '+r.offReason:''));
+  else if(r.off)meta.push('OFF'+(r.offReason?': '+r.offReason:''));
   $('taMeta').textContent=meta.join(' \u00b7 ')||'\u2014';
   $('taTime').value='';
   var b=$('taBtns'); b.innerHTML='';
   var mk=function(label,cls,fn){var x=document.createElement('button');x.className='btn'+(cls?' '+cls:'');x.textContent=label;x.onclick=fn;b.appendChild(x)};
-  var showTime=true;
-  if(r.state==='ON'){
-    $('taTimeLbl').textContent='Clock-out time (blank = right now)';
-    mk('Clock out','',function(){taPunch('out')});
-  } else if(r.state==='LATE'||r.state==='SOON'){
-    $('taTimeLbl').textContent='Clock-in time (blank = right now)';
-    mk('Clock in','',function(){taPunch('in')});
-    if(r.state==='LATE'){
-      mk('Mark missed (no-show)','danger',function(){
-        if(!confirm('Mark '+taRow.name+' MISSED today? Creates a 0-hour MISSED shift.'))return;
-        api('dashPunch',[taRow.id,'missed','no-show',KEYV()],function(res){
-          toast(res.reply); closeSheets(); TD=null; loadToday(true);
-        });
-      });
-    }
-    mk('Off today','sec',function(){
-      var why=prompt('Reason (optional):','')||'';
-      api('dashAddException',[taRow.id,B.today,B.today,'OFF','','',why,KEYV()],function(){
-        toast('Marked off'); closeSheets(); TD=null; SH=null; loadToday(true);
-      });
+
+  // ---- v3.9 UNIVERSAL MENU: same standardized actions on every card,
+  // contextual first, full set always reachable, every mark undoable. ----
+  var showTime=(r.state==='ON'||r.state==='LATE'||r.state==='SOON');
+  $('taTimeLbl').textContent=(r.state==='ON')?'Clock-out time (blank = right now)':'Clock-in time (blank = right now)';
+
+  // primary punch
+  if(r.state==='ON'){ mk('Clock out','',function(){taPunch('out')}); }
+  else { mk('Clock in','',function(){$('taTimeWrap').style.display='';taPunch('in')}); }
+
+  // undo for the current mark (fluid corrections)
+  if(r.state==='MISSED'&&r.shiftId){
+    mk('Remove no-show mark','danger',function(){
+      if(!confirm('Remove the MISSED record for '+taRow.name+'? Preserved in Bot_Log.'))return;
+      api('dashDeleteShift',[taRow.shiftId,KEYV()],function(){taAfter('No-show mark removed')});
     });
-  } else if((r.state==='DONE'||r.state==='EXTRA')&&r.shiftId){
-    showTime=false;
-    mk('Edit this shift','',function(){taOpenShiftEditor()});
-  } else if(r.state==='MISSED'){
-    showTime=false;
-    if(r.shiftId){
-      mk('Remove no-show mark','danger',function(){
-        if(!confirm('Remove the MISSED record for '+taRow.name+'? Preserved in Bot_Log.'))return;
-        api('dashDeleteShift',[taRow.shiftId,KEYV()],function(){
-          toast('No-show mark removed'); closeSheets(); TD=null; loadInit(true,false);
-        });
-      });
-    }
-    mk('Clock in anyway','sec',function(){$('taTimeWrap').style.display='';taPunch('in')});
-  } else if(r.state==='OFF'){
-    showTime=false;
-    mk('Clock in anyway','',function(){$('taTimeWrap').style.display='';taPunch('in')});
   }
+  if((r.state==='CALLIN'||r.state==='OFF')&&r.excId){
+    mk('Remove '+(r.state==='CALLIN'?'call-in':'off')+' mark','danger',function(){
+      if(!confirm('Remove today\'s '+(taRow.state==='CALLIN'?'call-in':'OFF')+' mark for '+taRow.name+'?'))return;
+      api('dashCancelException',[taRow.excId,KEYV()],function(){taAfter('Mark removed')});
+    });
+  }
+
+  // state marks (not shown for states that already are that thing)
+  if(r.state!=='MISSED'&&r.state!=='DONE'&&r.state!=='ON'){
+    mk('No-show','sec',function(){
+      if(!confirm('Mark '+taRow.name+' MISSED today? Creates a 0-hour MISSED shift.'))return;
+      api('dashPunch',[taRow.id,'missed','no-show',KEYV()],function(res){taAfter(res.reply)});
+    });
+  }
+  if(r.state!=='CALLIN'&&r.state!=='DONE'&&r.state!=='ON'){
+    mk('Call-in\u2026','sec',function(){
+      var why=prompt('Call-in reason (required):','');
+      if(!why||!why.trim()){toast('Call-in needs a reason');return}
+      api('dashAddException',[taRow.id,B.today,B.today,'OFF','','','CALLIN: '+why.trim(),KEYV()],function(){taAfter('Call-in recorded')});
+    });
+  }
+  if(r.state!=='OFF'&&r.state!=='CALLIN'&&r.state!=='DONE'&&r.state!=='ON'){
+    mk('Off today\u2026','sec',function(){
+      var why=prompt('Reason (optional):','')||'';
+      api('dashAddException',[taRow.id,B.today,B.today,'OFF','','',why,KEYV()],function(){taAfter('Marked off')});
+    });
+  }
+  if((r.state==='DONE'||r.state==='EXTRA')&&r.shiftId){
+    mk('Edit this shift','sec',function(){taOpenShiftEditor()});
+  }
+
   $('taTimeWrap').style.display=showTime?'':'none';
   openSheet('shTAct');
 }
+
+// v3.9: one post-action path — instant feedback, quiet revalidate.
+// No blocking spinner-refresh after a confirmed write.
+function taAfter(msg){
+  toast(msg||'Saved'); closeSheets();
+  SH=null;
+  loadInit(true,true);   // forced fresh, but QUIET — screen stays live
+}
+
 function taPunch(action){
   var t=$('taTime').value||'';
   api('dashPunch',[taRow.id,action,t,KEYV()],function(res){
