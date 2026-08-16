@@ -291,7 +291,7 @@ var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleuserco
 // false = original behavior: session + cached data survive refreshes
 //         within the same tab; fresh opens still require a tap.
 var FORCE_LOGIN = false;
-var FE_VERSION = '3.9';   // shown in the footer next to the server's
+var FE_VERSION = '3.9.1';   // shown in the footer next to the server's
 
 /* ======================================================== */
 
@@ -502,6 +502,7 @@ function showTab(t){
   if(t==='today'&&!TD)loadToday(false);
   if(t==='shifts'&&!SH)loadShifts();
   if(t==='settings'&&!CFG)loadCfg();
+  if(t==='roster'&&APPL===null)loadApplicants();
 }
 
 /* ============ TODAY BOARD ============ */
@@ -839,8 +840,34 @@ function renderSettings(){
 }
 
 /* ============ ROSTER ============ */
+var APPL=null;
+function loadApplicants(){
+  api('dashApplicants',[KEYV()],function(res){APPL=(res&&res.applicants)||[];renderRoster();},true);
+}
 function renderRoster(){
   var v=$('vRoster'); v.innerHTML='';
+  if(APPL&&APPL.length){
+    v.innerHTML+='<div class="secthead" style="color:#6b3fb0">Applicants \u2014 pending hire ('+APPL.length+')</div>';
+    APPL.forEach(function(a){
+      var el=document.createElement('div'); el.className='card';
+      el.style.borderLeft='5px solid #8e5bd4';
+      el.innerHTML='<div class="cname">'+esc(a.name)+'</div>'+
+        '<div class="cmeta">'+esc(a.license?('License '+a.license):'')+
+        (a.phone?' \u00b7 '+esc(a.phone):'')+
+        (a.submitted?' \u00b7 applied '+esc(a.submitted):'')+'</div>'+
+        '<button class="btn" style="margin-top:8px">Hire\u2026</button>';
+      el.querySelector('button').onclick=function(ev){
+        ev.stopPropagation();
+        if(!confirm('Hire '+a.name+'?\n\nCreates their Driver record, DQF folder, and compliance checklist.'))return;
+        api('dashHire',[a.id,KEYV()],function(res){
+          toast(res.reply||'Hired');
+          APPL=null; loadApplicants();
+          loadInit(true,true);
+        });
+      };
+      v.appendChild(el);
+    });
+  }
   var act=B.roster.filter(function(d){return /^active$/i.test(d.status)});
   var inact=B.roster.filter(function(d){return !/^active$/i.test(d.status)});
   v.innerHTML+='<div class="secthead">Active ('+act.length+')</div>';
