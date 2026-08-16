@@ -155,8 +155,12 @@
 <main>
   <div id="vToday">
     <div class="tdhead">
-      <span id="tdLabel"></span>
-      <button class="rf" onclick="loadToday(true)">&#8635; Refresh</button>
+      <button class="rf" onclick="dayNav(-1)">&#9664;</button>
+      <span id="tdLabel" onclick="dayPick()" style="cursor:pointer"></span>
+      <button class="rf" onclick="dayNav(1)">&#9654;</button>
+      <button class="rf" id="dayTodayBtn" onclick="dayReset()" style="display:none">Today</button>
+      <button class="rf" onclick="dayRefresh()">&#8635;</button>
+      <input type="date" id="dayInput" style="position:absolute;opacity:0;width:1px;height:1px" onchange="daySet(this.value)">
     </div>
     <div id="todayList"><div class="empty">Loading&hellip;</div></div>
   </div>
@@ -291,7 +295,7 @@ var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleuserco
 // false = original behavior: session + cached data survive refreshes
 //         within the same tab; fresh opens still require a tap.
 var FORCE_LOGIN = false;
-var FE_VERSION = '3.9.1';   // shown in the footer next to the server's
+var FE_VERSION = '3.9.2';   // shown in the footer next to the server's
 
 /* ======================================================== */
 
@@ -505,20 +509,47 @@ function showTab(t){
   if(t==='roster'&&APPL===null)loadApplicants();
 }
 
-/* ============ TODAY BOARD ============ */
+/* ============ TODAY / ANY-DAY BOARD ============ */
+var daySel=null;   // null = live today; else 'yyyy-MM-dd'
 function loadToday(force){
+  if(daySel){loadDay(daySel);return}
   if(TD&&!force){renderToday();return}
   loadInit(!!force, false);
 }
-function renderToday(){
-  $('tdLabel').textContent=TD.label+' \u00b7 as of '+TD.now;
+function dayRefresh(){ daySel?loadDay(daySel):loadToday(true); }
+function dayReset(){ daySel=null; $('dayTodayBtn').style.display='none'; TD=null; loadInit(true,false); }
+function dayNav(d){
+  var base=daySel||B.today;
+  daySel=_ymdShift_(base,d);
+  if(daySel===B.today){dayReset();return}
+  loadDay(daySel);
+}
+function dayPick(){ var i=$('dayInput'); i.value=daySel||B.today; (i.showPicker?i.showPicker():i.click()); }
+function daySet(v){
+  if(!v)return;
+  if(v===B.today){dayReset();return}
+  daySel=v; loadDay(v);
+}
+function loadDay(ymd){
+  api('dashDay',[ymd,KEYV()],function(t){
+    if(t.isToday){TD=t;dayReset();return}
+    $('dayTodayBtn').style.display='';
+    renderBoard(t,true);
+  });
+}
+function renderToday(){ if(!daySel) renderBoard(TD,false); }
+function renderBoard(T,viewOnly){
+  $('tdLabel').textContent=T.label+' \u00b7 '+(viewOnly?(T.isPast?'final':'planned'):('as of '+T.now));
   var v=$('todayList'); v.innerHTML='';
-  if(!TD.rows.length){v.innerHTML='<div class="empty">Nothing scheduled and nobody punched. Quiet day.</div>';return}
+  if(!T.rows.length){v.innerHTML='<div class="empty">'+(viewOnly?'Nothing on this day.':'Nothing scheduled and nobody punched. Quiet day.')+'</div>';return}
+  TD={rows:T.rows,label:T.label,now:T.now};
+  window._VIEWONLY_=!!viewOnly;
   var groups=[
     ['ON','On the clock'],
     ['LATE','No punch \u2014 past start'],
     ['MISSED','No-shows (marked missed)'],
     ['CALLIN','Call-ins'],
+    ['NOREC','Scheduled \u2014 no punch recorded'],
     ['SOON','Coming up'],
     ['DONE','Done today'],
     ['EXTRA','Unscheduled punches'],
@@ -534,6 +565,7 @@ function renderToday(){
 }
 function todayCard(r){
   var el=document.createElement('div'); el.className='card tcard st-'+r.state;
+  if(window._VIEWONLY_)el.style.pointerEvents='none';
   el.style.cursor='pointer';
   el.onclick=function(){openTodayAction(r)};
   var chip='';
@@ -544,6 +576,7 @@ function todayCard(r){
   else if(r.state==='EXTRA')chip='<span class="chip amber">unscheduled</span>';
   else if(r.state==='MISSED')chip='<span class="chip warn">no-show</span>';
   else if(r.state==='CALLIN')chip='<span class="chip" style="background:#f0e7fb;color:#6b3fb0">called in</span>';
+  else if(r.state==='NOREC')chip='<span class="chip warn">no record</span>';
   else chip='<span class="chip dim">OFF</span>';
 
   var sched=r.schedStart
@@ -562,6 +595,8 @@ function todayCard(r){
     act='<b style="color:var(--red)">Marked missed</b> \u00b7 0h';
   } else if(r.state==='CALLIN'){
     act='<b style="color:#6b3fb0">Called in</b>'+(r.offReason?' \u00b7 '+esc(r.offReason):'');
+  } else if(r.state==='NOREC'){
+    act='<b style="color:var(--amber)">Scheduled, no punch, no mark</b>';
   } else if(r.state==='SOON'){
     act='Starts '+fmtT(r.schedStart);
   } else if(r.off&&r.offReason){
@@ -846,40 +881,45 @@ function loadApplicants(){
 }
 function renderRoster(){
   var v=$('vRoster'); v.innerHTML='';
+  var act=B.roster.filter(function(d){return /^active$/i.test(d.status)});
+  var inact=B.roster.filter(function(d){return !/^active$/i.test(d.status)});
+  var head=function(txt,color){
+    var d=document.createElement('div'); d.className='secthead'; d.textContent=txt;
+    if(color)d.style.color=color; v.appendChild(d);
+  };
+  // Active crew first — applicants never displace the working roster.
+  head('Active ('+act.length+')');
+  act.forEach(function(d){
+    var c=card(d); c.onclick=function(){openDriver(d)}; v.appendChild(c);
+  });
+  // Applicants pending hire (purple), below the crew.
   if(APPL&&APPL.length){
-    v.innerHTML+='<div class="secthead" style="color:#6b3fb0">Applicants \u2014 pending hire ('+APPL.length+')</div>';
+    head('Applicants \u2014 pending hire ('+APPL.length+')','#6b3fb0');
     APPL.forEach(function(a){
       var el=document.createElement('div'); el.className='card';
       el.style.borderLeft='5px solid #8e5bd4';
-      el.innerHTML='<div class="cname">'+esc(a.name)+'</div>'+
-        '<div class="cmeta">'+esc(a.license?('License '+a.license):'')+
+      el.innerHTML='<div class="rowline"><span class="nm">'+esc(a.name)+'</span>'+
+        '<span class="chip" style="background:#f0e7fb;color:#6b3fb0">applicant</span></div>'+
+        '<div class="meta">'+esc(a.license?('License '+a.license):'no license listed')+
         (a.phone?' \u00b7 '+esc(a.phone):'')+
-        (a.submitted?' \u00b7 applied '+esc(a.submitted):'')+'</div>'+
-        '<button class="btn" style="margin-top:8px">Hire\u2026</button>';
-      el.querySelector('button').onclick=function(ev){
+        (a.submitted?' \u00b7 applied '+esc(a.submitted):'')+'</div>';
+      var btn=document.createElement('button');
+      btn.className='btn'; btn.style.marginTop='8px'; btn.textContent='Hire\u2026';
+      btn.onclick=function(ev){
         ev.stopPropagation();
         if(!confirm('Hire '+a.name+'?\n\nCreates their Driver record, DQF folder, and compliance checklist.'))return;
         api('dashHire',[a.id,KEYV()],function(res){
-          toast(res.reply||'Hired');
-          APPL=null; loadApplicants();
-          loadInit(true,true);
+          toast(res.reply||'Hired'); APPL=null; loadApplicants(); loadInit(true,true);
         });
       };
+      el.appendChild(btn);
       v.appendChild(el);
     });
   }
-  var act=B.roster.filter(function(d){return /^active$/i.test(d.status)});
-  var inact=B.roster.filter(function(d){return !/^active$/i.test(d.status)});
-  v.innerHTML+='<div class="secthead">Active ('+act.length+')</div>';
-  act.forEach(function(d){v.appendChild(card(d))});
-  v.innerHTML+='<div class="secthead">Inactive ('+inact.length+')</div>';
-  var frag=document.createDocumentFragment();
-  inact.forEach(function(d){frag.appendChild(card(d))});
-  v.appendChild(frag);
-  // rebind active cards (innerHTML+= killed listeners)
-  var cards=v.querySelectorAll('.card');
-  var all=act.concat(inact);
-  cards.forEach(function(c,i){c.onclick=function(){openDriver(all[i])}});
+  head('Inactive ('+inact.length+')');
+  inact.forEach(function(d){
+    var c=card(d); c.onclick=function(){openDriver(d)}; v.appendChild(c);
+  });
 }
 function card(d){
   var el=document.createElement('div'); el.className='card';
