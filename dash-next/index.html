@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/assets/logos/itow-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 @font-face{
@@ -35,7 +35,7 @@
   --okbg:rgba(61,220,132,.12); --warnbg:rgba(255,176,32,.12);
   --badbg:rgba(255,92,92,.12); --infobg:rgba(90,169,255,.12);
   --purplebg:rgba(192,156,255,.13);
-  --brand:'SF Sports Night',var(--body); --body:'Barlow',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --brand:'SF Sports Night','Barlow Condensed',var(--body); --body:'Barlow',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   --safe-b:env(safe-area-inset-bottom,0px);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -141,7 +141,9 @@ main{max-width:680px;margin:0 auto;padding:14px 12px 24px}
 
 /* ---------- search + filters ---------- */
 .search{position:relative;margin-bottom:10px}
-.search input{
+.search input[type=text]{
+  /* specificity must beat the generic input[type=text] rule further down,
+     which otherwise reset padding-left and slid the text under the icon */
   width:100%;padding:13px 14px 13px 44px;background:var(--surface);
   border:1px solid var(--line2);border-radius:2px;font-size:16px;color:var(--ink);
 }
