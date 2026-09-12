@@ -1704,7 +1704,7 @@ function renderLot(){
   var rows=LOT.rows.filter(function(r){
     if(!lotMatch(r)) return false;
     if(!q) return true;
-    return (r.plate+' '+r.vin+' '+r.call+' '+r.from+' '+r.vehicle+' '+r.juris+' '+r.id)
+    return (r.it+' '+r.plate+' '+r.vin+' '+r.call+' '+r.from+' '+r.vehicle+' '+r.juris+' '+r.id)
              .toLowerCase().indexOf(q)>=0;
   });
   var v=$('lList');
@@ -1733,6 +1733,10 @@ function lotCard(r){
   if(r.plate) idline.push(r.plate);
   if(r.vin) idline.push(r.vin.length===17?r.vin:(r.vin+' (partial)'));
   if(!idline.length) idline.push('no plate, no VIN');
+  // The file number goes first: it is what gets said on the phone and written
+  // on the folder. unshift rather than push so the no-plate-no-VIN warning
+  // above still fires on its own terms.
+  if(r.it) idline.unshift(r.it);
   var flags='';
   if(r.f_vin)    flags+='<span class="pill bad">No VIN</span> ';
   if(r.f_pretow) flags+='<span class="pill warn">No call-in</span> ';
@@ -1754,7 +1758,7 @@ function openImp(id){
   api('dashImpound',[id,KEYV()],function(d){
     LOTDET=d;
     $('impName').textContent=[d.fields.Year,d.fields.Make,d.fields.Model].filter(Boolean).join(' ')||'Unknown vehicle';
-    $('impSub').textContent='Call '+d.call+' · '+d.id+' · '+(d.status_label||d.status);
+    $('impSub').textContent=(d.it||d.id)+' · Call '+d.call+' · '+(d.status_label||d.status);
     $('impBody').innerHTML=impBody(d);
     openSheet('shImp');
   }, false, 'Loading');
@@ -1778,6 +1782,12 @@ function impBody(d){
   if(d.status!=='GOA'){
     h+='<button class="btn sec sm" onclick="quickGoa()">Mark GOA — never towed</button>';
   }
+  h+='</div>';
+
+  /* --- the file number --- */
+  h+='<div class="block"><span class="lbl">File number</span>';
+  h+=fld('f_IT_Number','iTow file #',f.IT_Number,'IT0300-26');
+  h+='<div class="sub2">Assigned on its own once the lot walk confirms the vehicle is really there. Type one in only to record a number off the old paper files.</div>';
   h+='</div>';
 
   /* --- the department, because it decides everything else --- */
@@ -1901,7 +1911,7 @@ function impNow(){
   $('f_Police_Notified_At').value=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
 }
 
-var IMP_FIELDS=['Jurisdiction','Police_Notified_At','Complaint_No','Pretow_Officer','Year','Make','Model',
+var IMP_FIELDS=['IT_Number','Jurisdiction','Police_Notified_At','Complaint_No','Pretow_Officer','Year','Make','Model',
                 'VIN','Plate','Plate_State','Tow_Date','Tow_Time','Tow_From','Tow_From_City','Tow_From_Zip',
                 'Requestor','Lot','Notes'];
 
