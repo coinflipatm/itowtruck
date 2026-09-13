@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="iTow auction listing for one vehicle available on June 8, 2026.">
-<title>Auction | iTow</title>
+<meta name="description" content="iTow public auction of 26 abandoned vehicles - Monday, September 21, 2026 at 1:30 PM, 3490 Dolan Dr, Flint, MI 48504. Year, make, model and VIN for every vehicle.">
+<title>Abandoned Vehicle Auction 9/21/26 | iTow</title>
 <link rel="icon" type="image/png" href="/assets/logos/itow-logo.png">
 <link rel="shortcut icon" href="/assets/logos/itow-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -95,6 +95,24 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
   .detail-grid{grid-template-columns:1fr}
   .panel{padding:1.4rem}
 }
+
+.lots{margin-top:2rem;border:1px solid var(--border);background:var(--card)}
+.lots-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--border)}
+.lots-head .panel-label{margin:0}
+.lots-head .count{font-family:var(--brand);font-size:0.8rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--g1)}
+.lot{display:grid;grid-template-columns:3.2rem 1fr auto;gap:0 1rem;align-items:center;padding:0.9rem 1.25rem;border-top:1px solid var(--border)}
+.lot:first-of-type{border-top:none}
+.lot:hover{background:var(--card2)}
+.lot .n{font-family:var(--brand);font-size:0.95rem;color:var(--g3);letter-spacing:0.06em}
+.lot .ymm{font-family:var(--brand);font-size:1.05rem;color:var(--white);text-transform:uppercase;line-height:1.2}
+.lot .vin{font-size:0.82rem;letter-spacing:0.1em;color:var(--g2);text-transform:uppercase;font-variant-numeric:tabular-nums}
+.legal{margin-top:2rem;padding:1.25rem;border:1px solid var(--border);background:rgba(255,255,255,0.02);font-size:0.86rem;color:var(--g2);line-height:1.7}
+.legal strong{color:var(--g1)}
+@media(max-width:600px){
+  .lot{grid-template-columns:2.4rem 1fr;row-gap:0.15rem}
+  .lot .vin{grid-column:2}
+  .lots-head{flex-direction:column;gap:0.3rem;align-items:flex-start}
+}
 </style>
 </head>
 <body>
@@ -107,60 +125,54 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 
 <section class="hero">
   <div class="wrap">
-    <div class="eyebrow">Auction listing &bull; June 8, 2026 &bull; <span>itowtruck.com/auction</span></div>
-    <h1 class="title">Vehicle Auction</h1>
-    <p class="subtitle">One vehicle is scheduled for auction on 6/8/26. Review the listing details below for the unit information.</p>
+    <div class="eyebrow">Public auction &bull; Monday, September 21, 2026 &bull; <span>1:30 PM</span></div>
+    <h1 class="title">Abandoned Vehicle Auction</h1>
+    <p class="subtitle">26 vehicles will be offered at public sale on Monday, September 21, 2026 at 1:30 PM at 3490 Dolan Dr, Flint, MI 48504. Year, make, model and VIN for every vehicle are listed below.</p>
 
     <div class="cta-row">
-      <a href="tel:8103945937" class="cta">&#9742; Call for Info</a>
-      <a href="mailto:info@itowtruck.com" class="cta secondary">Email Request</a>
+      <a href="tel:8103945937" class="cta">&#9742; (810) 394-5937</a>
+      <a href="mailto:info@itowtruck.com" class="cta secondary">Email iTow</a>
     </div>
 
-    <div class="grid">
-      <div class="panel">
-        <div class="panel-label">Vehicle</div>
-        <div class="vehicle">
-          <div class="vehicle-name">2016 Chevrolet Equinox</div>
-          <div class="vin">VIN 2GNFLGEKXG6263903</div>
-          <div class="detail-grid">
-            <div class="detail">
-              <div class="k">Auction date</div>
-              <div class="v">June 8, 2026</div>
-            </div>
-            <div class="detail">
-              <div class="k">Vehicle count</div>
-              <div class="v">1 vehicle</div>
-            </div>
-            <div class="detail">
-              <div class="k">Year / Make / Model</div>
-              <div class="v">2016 Chevrolet Equinox</div>
-            </div>
-            <div class="detail">
-              <div class="k">Listing ID</div>
-              <div class="v">2GNFLGEKXG6263903</div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="detail-grid" style="margin-top:0">
+      <div class="detail"><div class="k">Date</div><div class="v">Monday, Sept 21, 2026</div></div>
+      <div class="detail"><div class="k">Time</div><div class="v">1:30 PM</div></div>
+      <div class="detail"><div class="k">Location</div><div class="v">3490 Dolan Dr, Flint, MI 48504</div></div>
+      <div class="detail"><div class="k">Vehicles</div><div class="v">26</div></div>
+    </div>
 
-      <div class="panel">
-        <div class="panel-label">Auction notes</div>
-        <div class="list">
-          <div class="list-item">
-            <div class="k">Status</div>
-            <div class="v">Available for auction on the scheduled date.</div>
-          </div>
-          <div class="list-item">
-            <div class="k">Inspection / pickup</div>
-            <div class="v">Contact iTow directly for any inspection or pickup questions.</div>
-          </div>
-          <div class="list-item">
-            <div class="k">Contact</div>
-            <div class="v"><a href="mailto:info@itowtruck.com">info@itowtruck.com</a> or <a href="tel:8103945937">(810) 394-5937</a></div>
-          </div>
-        </div>
-        <div class="notice"><strong>Note:</strong> This page lists the single vehicle provided for the 6/8/26 auction. If you want, I can also add a photo, reserve price, pickup instructions, or a downloadable notice.</div>
-      </div>
+    <div class="lots">
+      <div class="lots-head"><div class="panel-label">Vehicles offered</div><div class="count">26 lots &bull; listed by lot number</div></div>
+      <div class="lot"><div class="n">01</div><div class="ymm">2018 Chevrolet Trax</div><div class="vin">VIN 3GNCJRSB7JL342473</div></div>
+      <div class="lot"><div class="n">02</div><div class="ymm">1999 Ford Taurus</div><div class="vin">VIN 1FAFP52U9XG314904</div></div>
+      <div class="lot"><div class="n">03</div><div class="ymm">2015 Mitsubishi Outlander Sport</div><div class="vin">VIN 4A4AP3AU3FE062225</div></div>
+      <div class="lot"><div class="n">04</div><div class="ymm">2011 Mazda CX-7</div><div class="vin">VIN JM3ER2B52B0356217</div></div>
+      <div class="lot"><div class="n">05</div><div class="ymm">2012 Chevrolet Malibu</div><div class="vin">VIN 1G1ZE5E04CF250561</div></div>
+      <div class="lot"><div class="n">06</div><div class="ymm">2003 Cadillac CTS</div><div class="vin">VIN 1G6DM577040108715</div></div>
+      <div class="lot"><div class="n">07</div><div class="ymm">2001 Pontiac Bonneville</div><div class="vin">VIN 1G2HY54K614137415</div></div>
+      <div class="lot"><div class="n">08</div><div class="ymm">2002 GMC Yukon</div><div class="vin">VIN 1GKEK13Z22J315366</div></div>
+      <div class="lot"><div class="n">09</div><div class="ymm">2011 Chevrolet Impala</div><div class="vin">VIN 2G1WB5EK1B1154874</div></div>
+      <div class="lot"><div class="n">10</div><div class="ymm">2010 Ford Taurus</div><div class="vin">VIN 1FAHP2FW0AG165115</div></div>
+      <div class="lot"><div class="n">11</div><div class="ymm">2016 Chevrolet Equinox</div><div class="vin">VIN 2GNFLGEKXG6263903</div></div>
+      <div class="lot"><div class="n">12</div><div class="ymm">2002 Buick Rendezvous</div><div class="vin">VIN 3G5DA03E12S584353</div></div>
+      <div class="lot"><div class="n">13</div><div class="ymm">2001 Ford Mustang</div><div class="vin">VIN 1FAFP40451F191449</div></div>
+      <div class="lot"><div class="n">14</div><div class="ymm">2016 Chrysler Town and Country</div><div class="vin">VIN 2C4RC1BG0GR187142</div></div>
+      <div class="lot"><div class="n">15</div><div class="ymm">2006 Chrysler 300</div><div class="vin">VIN 2C3KA53G36H259411</div></div>
+      <div class="lot"><div class="n">16</div><div class="ymm">2005 Chevrolet Silverado 1500</div><div class="vin">VIN 2GCEK19B551299412</div></div>
+      <div class="lot"><div class="n">17</div><div class="ymm">2012 Chevrolet Malibu</div><div class="vin">VIN 1G1ZC5E09CF224141</div></div>
+      <div class="lot"><div class="n">18</div><div class="ymm">2023 Kia Soul</div><div class="vin">VIN KNDJ23AU1P7856071</div></div>
+      <div class="lot"><div class="n">19</div><div class="ymm">2013 Chevrolet Malibu</div><div class="vin">VIN 1G11E5SA3DF226182</div></div>
+      <div class="lot"><div class="n">20</div><div class="ymm">2014 GMC Acadia</div><div class="vin">VIN 1GKKRNEDXEJ199605</div></div>
+      <div class="lot"><div class="n">21</div><div class="ymm">2004 Chevrolet Malibu</div><div class="vin">VIN 1G1ZS52F94F217154</div></div>
+      <div class="lot"><div class="n">22</div><div class="ymm">2014 Dodge Charger</div><div class="vin">VIN 2C3CDXHG7EH173632</div></div>
+      <div class="lot"><div class="n">23</div><div class="ymm">2014 Buick Verano</div><div class="vin">VIN 1G4PP5SK1E4139331</div></div>
+      <div class="lot"><div class="n">24</div><div class="ymm">1994 Cadillac Fleetwood</div><div class="vin">VIN 1G6DW52P3RR719603</div></div>
+      <div class="lot"><div class="n">25</div><div class="ymm">1998 Ford F-150</div><div class="vin">VIN 1FTZF18W3WNA33297</div></div>
+      <div class="lot"><div class="n">26</div><div class="ymm">2007 Chevrolet Tahoe</div><div class="vin">VIN 1GNFK13077R358313</div></div>
+    </div>
+
+    <div class="legal">
+      <strong>Notice of public sale of abandoned vehicles.</strong> Pursuant to Michigan Compiled Laws 257.252g, the vehicles listed above, held in the custody of iTow and Servicetek LLC, will be offered at public auction on Monday, September 21, 2026 at 1:30 PM at 3490 Dolan Dr, Flint, MI 48504. This listing is published in the Mt. Morris-Clio Herald and on this page. Questions about a specific vehicle, inspection, or pickup: call <a href="tel:8103945937">(810) 394-5937</a> or email <a href="mailto:info@itowtruck.com">info@itowtruck.com</a>.
     </div>
   </div>
 </section>
