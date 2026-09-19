@@ -655,6 +655,46 @@ function apiFetch(url,attempt,retryOk){
   });
 }
 
+/* ---- perf readout (v4.2) ----------------------------------------------
+   Open the dash with ?perf=1 (sticky; ?perf=0 turns it off) and a small
+   monospace pill shows, per API call: wall time as the phone saw it, the
+   server's own time when the payload carries t (boot does), and whether the
+   server answered from cache. Tap the pill to copy the last 40 calls.
+   Always logs to console. No behavior change when off. The point is to
+   measure the split between "waiting on Google to wake up" and "server
+   doing sheet reads" before spending anything on speed. */
+var PERF = (function(){
+  try{
+    var q=/[?&]perf=(\d)/.exec(location.search);
+    if(q) localStorage.setItem('towos_perf', q[1]);
+    return localStorage.getItem('towos_perf')==='1';
+  }catch(e){ return false }
+})();
+var PERF_LOG = [];
+function perfNote(fn, wall, data, err){
+  var srv = (data && data.t && typeof data.t==='object') ? data.t : null;
+  var rec = { at:new Date().toTimeString().slice(0,8), fn:fn, wall:Math.round(wall),
+              srv: srv ? Math.round((srv.verify||0)+(srv.sheets||0)) : null,
+              cached: srv ? !!srv.cached : null, err: err?1:0 };
+  PERF_LOG.push(rec); if(PERF_LOG.length>40) PERF_LOG.shift();
+  try{ console.log('[perf]', rec.fn, rec.wall+'ms', rec.srv!=null?('srv '+rec.srv+'ms'+(rec.cached?' cached':'')):'', err?'ERR':''); }catch(e){}
+  if(!PERF) return;
+  var el=document.getElementById('perfPill');
+  if(!el){
+    el=document.createElement('div'); el.id='perfPill';
+    el.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9999;background:#111;color:#8f8;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;opacity:.92;max-width:72vw;white-space:pre-wrap';
+    el.onclick=function(){
+      var txt=PERF_LOG.map(function(r){ return r.at+' '+r.fn+' '+r.wall+'ms'+(r.srv!=null?' srv'+r.srv+(r.cached?'c':''):'')+(r.err?' ERR':''); }).join('\n');
+      var done=function(){ toast('Perf log copied ('+PERF_LOG.length+')') };
+      try{ navigator.clipboard.writeText(txt).then(done, function(){ prompt('Perf log', txt) }); }catch(e){ prompt('Perf log', txt) }
+    };
+    document.body.appendChild(el);
+  }
+  var walls=PERF_LOG.map(function(r){return r.wall}).sort(function(a,b){return a-b});
+  var med=walls[Math.floor(walls.length/2)];
+  el.textContent=rec.fn+' '+rec.wall+'ms'+(rec.srv!=null?'  srv '+rec.srv+'ms'+(rec.cached?' (cached)':''):'')+'\nmed '+med+'ms  n='+PERF_LOG.length+'  tap=copy';
+}
+
 /* PENDING ref-counts in-flight requests so a response arriving while another
    is still running cannot clear the spinner or re-enable the buttons under it.
    INFLIGHT drops an identical write fired twice before the first has answered. */
@@ -672,12 +712,17 @@ function api(fn,args,ok,quiet,msg){
     if(!isRead) delete INFLIGHT[sig];
     if(!quiet){ PENDING = Math.max(0,PENDING-1); if(!PENDING) spin(false) }
   }
+  var pnow=function(){ return (window.performance&&performance.now)?performance.now():Date.now() };
+  var pt0=pnow(), pnoted=false;
+  var pnote=function(data,err){ if(pnoted) return; pnoted=true; perfNote(fn, pnow()-pt0, data, err); };
   apiFetch(API_URL+'?api=1&fn='+encodeURIComponent(fn)+'&args='+encodeURIComponent(JSON.stringify(args)),0,isRead)
     .then(function(j){
+      pnote(j&&j.data, !j.ok);
       if(!j.ok) throw new Error(j.error||'Request failed');
       settle(); ok(j.data);
     })
     .catch(function(e){
+      pnote(null, true);
       settle();
       if(/^NONJSON/.test(e.message)){
         toast(isRead ? 'Server hiccup — tap again in a few seconds.'
