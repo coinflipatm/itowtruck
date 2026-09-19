@@ -576,7 +576,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.1';      // expects server v3.12+ (applicant endpoints)
+var FE_VERSION  = '4.3';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2)
 
 /* ==========================================================
    AUTH
@@ -1080,8 +1080,14 @@ function addAlias(){
 /* ==========================================================
    PEOPLE — applicants
    ========================================================== */
+var APPL_REQ=0;   /* v4.3: paint() runs on the cached init AND the fresh one; one fetch is enough.
+                     Holds the time of the in-flight request; a request older than 30s (failed,
+                     never answered) no longer blocks a new one. */
 function loadAppl(quiet){
+  if(APPL_REQ && Date.now()-APPL_REQ<30000) return;
+  APPL_REQ=Date.now();
   api('dashApplicants',[KEYV()],function(res){
+    APPL_REQ=0;
     APPL=(res&&res.applicants)||[];
     if(res&&res.stages&&res.stages.length) STAGES=res.stages;
     renderChips(); renderAppl(); applBadge();
@@ -1803,13 +1809,22 @@ function lotCard(r){
 
 /* ---------- detail = the TOP form ---------- */
 function openImp(id){
-  api('dashImpound',[id,KEYV()],function(d){
-    LOTDET=d;
-    $('impName').textContent=[d.fields.Year,d.fields.Make,d.fields.Model].filter(Boolean).join(' ')||'Unknown vehicle';
-    $('impSub').textContent=(d.it||d.id)+' · Call '+d.call+' · '+(d.status_label||d.status);
-    $('impBody').innerHTML=impBody(d);
-    openSheet('shImp');
-  }, false, 'Loading');
+  api('dashImpound',[id,KEYV()],function(d){ renderImp(d) }, false, 'Loading');
+}
+function renderImp(d){
+  LOTDET=d;
+  $('impName').textContent=[d.fields.Year,d.fields.Make,d.fields.Model].filter(Boolean).join(' ')||'Unknown vehicle';
+  $('impSub').textContent=(d.it||d.id)+' · Call '+d.call+' · '+(d.status_label||d.status);
+  $('impBody').innerHTML=impBody(d);
+  openSheet('shImp');
+}
+/* v4.3: server 25 v1.2 returns { detail, lot } on every Lot write, so the screen
+   redraws from the response. Two round trips (dashImpounds + dashImpound, ~3s
+   each on the phone) gone per save. Older server = no detail -> old behaviour. */
+function applyImpResult(r, reopen){
+  if(r&&r.lot){ LOT=r.lot; renderLotChips(); renderLot() } else { loadLot(true) }
+  if(r&&r.detail){ if(reopen) renderImp(r.detail); else LOTDET=r.detail }
+  else if(reopen && LOTDET) openImp(LOTDET.id);
 }
 
 function fld(id,label,val,ph,type){
@@ -1973,20 +1988,18 @@ function saveImp(){
   if(!LOTDET) return;
   api('dashSaveImpound',[LOTDET.id,impCollect(),KEYV()],function(r){
     toast(r.note||'Saved.');
-    loadLot(true);
-    openImp(LOTDET.id);
+    applyImpResult(r, true);
   }, false, 'Saving');
 }
 
 function genTop(){
   if(!LOTDET) return;
   api('dashImpoundTop',[LOTDET.id,impCollect(),KEYV()],function(r){
-    loadLot(true);
     var msg='TOP ready';
     if(r.warnings&&r.warnings.length) msg+=' — '+r.warnings.join('; ');
     toast(msg);
     window.open(r.url,'_blank');
-    openImp(LOTDET.id);
+    applyImpResult(r, true);
   }, false, 'Generating TOP');
 }
 
@@ -2014,14 +2027,14 @@ function saveImpStatus(){
   if(!lotStTarget||!impStPick) { toast('Pick a status first.',true); return }
   api('dashImpoundStatus',[lotStTarget,impStPick,$('impStNote').value,KEYV()],function(r){
     toast(r.note||'Saved.');
-    closeSheets(); loadLot(true);
+    closeSheets(); applyImpResult(r, false);
   }, false, 'Saving');
 }
 function quickGoa(){
   if(!LOTDET) return;
   api('dashImpoundStatus',[LOTDET.id,'GOA','',KEYV()],function(r){
     toast(r.note||'Marked GOA.');
-    closeSheets(); loadLot(true);
+    closeSheets(); applyImpResult(r, false);
   }, false, 'Saving');
 }
 
