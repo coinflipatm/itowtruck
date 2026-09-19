@@ -7,6 +7,23 @@
  */
 import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite } from '../_edge.js';
 
+/** Refetch the reads a write just invalidated, for the writer's key, and cache them. */
+async function prewarm(env, groups, key, keyHash) {
+  const plan = [];
+  if (groups.indexOf('board') >= 0) { plan.push(['dashInit', [key, 0]]); plan.push(['dashShifts', [key]]); }
+  if (groups.indexOf('lot') >= 0) plan.push(['dashImpounds', [key]]);
+  if (groups.indexOf('appl') >= 0) plan.push(['dashApplicants', [key]]);
+  if (groups.indexOf('config') >= 0) plan.push(['dashConfigList', [key]]);
+  for (const [fn, args] of plan) {
+    const qs = new URLSearchParams({ api: '1', fn: fn, args: JSON.stringify(args) }).toString();
+    const r = await upstream(env, qs);
+    let o = null; try { o = JSON.parse(r.text); } catch (e) {}
+    if (!o || !o.ok) continue;
+    const ck = await cacheKey(env, fn, args, keyHash);
+    await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: READ_FNS[fn][1] });
+  }
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -68,7 +85,12 @@ export async function onRequestGet(context) {
         const ck = await cacheKey(env, fn, args, keyHash);
         await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: spec[1] });
       } else if (!(await writeThroughLot(env, o.data))) {
-        await bumpGens(env, groupsForWrite(fn));
+        const groups = groupsForWrite(fn);
+        await bumpGens(env, groups);
+        // Prewarm: the screens this write just invalidated are refetched for
+        // this caller in the background, so his next tap is a HIT instead of
+        // a 4-7s rebuild. Runs after the response is sent (waitUntil).
+        context.waitUntil(prewarm(env, groups, key, keyHash).catch(function () {}));
       }
     } catch (e) {}
   }
