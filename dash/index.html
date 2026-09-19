@@ -576,7 +576,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.4';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge
+var FE_VERSION  = '4.5';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -730,7 +730,7 @@ function perfNote(fn, wall, data, err, edge){
    INFLIGHT drops an identical write fired twice before the first has answered. */
 var PENDING = 0, INFLIGHT = {};
 
-function api(fn,args,ok,quiet,msg){
+function api(fn,args,ok,quiet,msg,fail){
   var isRead = !!READ_FNS[fn];
   var sig = fn+'|'+JSON.stringify(args);
   if(!isRead){
@@ -754,14 +754,44 @@ function api(fn,args,ok,quiet,msg){
     .catch(function(e){
       pnote(null, true);
       settle();
-      if(/^NONJSON/.test(e.message)){
+      var maybeSaved=/^NONJSON/.test(e.message);
+      if(maybeSaved){
         toast(isRead ? 'Server hiccup — tap again in a few seconds.'
                      : 'No answer from the server. It may have saved anyway — check before retrying.', true);
-        return;
-      }
-      if(/Not authorized/i.test(e.message)){ authFail(); return }
-      toast(e.message||String(e), true);
+      } else if(/Not authorized/i.test(e.message)){ authFail(); return }
+      else toast(e.message||String(e), true);
+      if(fail){ try{ fail(e, maybeSaved) }catch(x){} }
     });
+}
+
+/* ---- optimistic writes (v4.5) ------------------------------------------
+   Fino, 9/19: "yes to both. go." The screen applies the change the moment
+   you tap, closes the sheet, and a small 'Saving…' pill sits at the bottom
+   while Google does its 3-12s. On a refusal the change is reverted and the
+   reason toasted. On a no-answer (may have saved) nothing is reverted; the
+   screen is refetched instead, so what you see is what the sheet has.
+   o = { apply, revert, fn, args, ok(r), refresh() } */
+var SAVING=0;
+function savingPill(on){
+  var el=$('savePill');
+  if(!el){
+    el=document.createElement('div'); el.id='savePill';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9998;background:#222;color:#fff;font:13px/1 -apple-system,system-ui,sans-serif;padding:8px 14px;border-radius:999px;opacity:.9;display:none';
+    el.textContent='Saving…';
+    document.body.appendChild(el);
+  }
+  el.style.display=on?'':'none';
+}
+function optimistic(o){
+  try{ o.apply() }catch(e){}
+  SAVING++; savingPill(true);
+  var done=function(){ SAVING=Math.max(0,SAVING-1); if(!SAVING) savingPill(false) };
+  api(o.fn, o.args, function(r){ done(); if(o.ok) o.ok(r) }, true, '', function(e, maybeSaved){
+    done();
+    if(maybeSaved){ if(o.refresh) o.refresh(); return }
+    try{ o.revert() }catch(x){}
+    toast('Not saved — reverted. '+(e.message||''), true);
+  });
 }
 function authFail(){
   var bad=CRED;
@@ -1409,11 +1439,19 @@ function openStage(s){
   closeSheets(); openSheet('shStage');
 }
 function saveStage(){
-  var n=$('stageNote').value.trim();
-  api('dashSetApplicantStage',[stageTarget.id,stageTarget.stage,n,KEYV()],function(r){
-    toast(r.from+' → '+r.stage); closeSheets();
-    APPL=null; loadAppl(true); openApplicant(stageTarget.id);
-  }, false, 'Saving');
+  var n=$('stageNote').value.trim(), t=stageTarget;
+  /* v4.5 optimistic: the chip and the card move now; the list is refetched
+     quietly afterwards (prewarmed by the edge). */
+  var a=(APPL||[]).filter(function(x){ return x.id===t.id })[0];
+  var was=a?a.stage:null;
+  closeSheets();
+  optimistic({
+    apply: function(){ if(a){ a.stage=t.stage; renderChips(); renderAppl(); applBadge() } if(APDET&&APDET.id===t.id) APDET.stage=t.stage },
+    revert: function(){ if(a&&was!==null){ a.stage=was; renderChips(); renderAppl(); applBadge() } if(APDET&&APDET.id===t.id&&was!==null) APDET.stage=was },
+    refresh: function(){ APPL=null; loadAppl(true) },
+    fn:'dashSetApplicantStage', args:[t.id,t.stage,n,KEYV()],
+    ok: function(r){ toast(r.from+' → '+r.stage); APPL=null; loadAppl(true) }
+  });
 }
 function doHire(){
   var d=APDET;
@@ -1614,9 +1652,21 @@ function saveShift(){
   if(iv && iv!==s.inT) jobs.push(['clock_in',iv]);
   if(ov && ov!==s.outT) jobs.push(['clock_out',ov]);
   if(!jobs.length){ toast('No time changes',true); return }
+  /* v4.5 optimistic: the card shows the new times now; hours and the week
+     total come back from the server (prewarmed by the edge, so a HIT). */
+  var was={inT:s.inT, outT:s.outT};
+  var row=(SH&&SH.shifts||[]).filter(function(x){ return x.id===s.id })[0];
+  var setTimes=function(t){ if(row){ row.inT=t.inT; row.outT=t.outT } if(SH) renderShifts() };
+  closeSheets();
   var run=function(i){
-    if(i>=jobs.length){ toast('Saved'); closeSheets(); SH=null; TD=null; loadShifts(); return }
-    api('dashFixShiftTime',[s.id,jobs[i][0],jobs[i][1],why,KEYV()],function(){ run(i+1) },false,'Saving');
+    if(i>=jobs.length){ toast('Saved'); SH=null; TD=null; loadShifts(); return }
+    optimistic({
+      apply: function(){ if(i===0){ var t={inT:was.inT,outT:was.outT}; jobs.forEach(function(j){ if(j[0]==='clock_in') t.inT=j[1]; else t.outT=j[1] }); setTimes(t) } },
+      revert: function(){ setTimes(was) },
+      refresh: function(){ SH=null; TD=null; loadShifts() },
+      fn:'dashFixShiftTime', args:[s.id,jobs[i][0],jobs[i][1],why,KEYV()],
+      ok: function(){ run(i+1) }
+    });
   };
   run(0);
 }
@@ -2016,10 +2066,25 @@ function impCollect(){
 
 function saveImp(){
   if(!LOTDET) return;
-  api('dashSaveImpound',[LOTDET.id,impCollect(),KEYV()],function(r){
-    toast(r.note||'Saved.');
-    applyImpResult(r, true);
-  }, false, 'Saving');
+  /* v4.5 optimistic: the form keeps what you typed and the list row updates
+     now; the server's normalised record (upper-case plate, 14:21 time)
+     replaces it when the answer lands. */
+  var det=LOTDET, fields=impCollect(), before=JSON.parse(JSON.stringify(det.fields||{}));
+  var lotRow=(LOT&&LOT.rows||[]).filter(function(x){ return x.id===det.id })[0];
+  var rowBefore=lotRow?JSON.parse(JSON.stringify(lotRow)):null;
+  optimistic({
+    apply: function(){
+      Object.keys(fields).forEach(function(f){ det.fields[f]=fields[f] });
+      if(lotRow){ lotRow.plate=fields.Plate||lotRow.plate; lotRow.vin=fields.VIN||lotRow.vin;
+        lotRow.vehicle=[fields.Year,fields.Make,fields.Model].filter(Boolean).join(' ').trim()||lotRow.vehicle;
+        lotRow.from=fields.Tow_From||lotRow.from; lotRow.juris=fields.Jurisdiction||lotRow.juris; lotRow.lot=fields.Lot||lotRow.lot; renderLot() }
+      $('impName').textContent=[fields.Year,fields.Make,fields.Model].filter(Boolean).join(' ')||'Unknown vehicle';
+    },
+    revert: function(){ det.fields=before; if(lotRow&&rowBefore){ Object.keys(rowBefore).forEach(function(k){ lotRow[k]=rowBefore[k] }); renderLot() } if(LOTDET===det) renderImp(det) },
+    refresh: function(){ loadLot(true); openImp(det.id) },
+    fn:'dashSaveImpound', args:[det.id,fields,KEYV()],
+    ok: function(r){ toast(r.note||'Saved.'); if(LOTDET===det) applyImpResult(r, true); else if(r&&r.lot){ LOT=r.lot; renderLotChips(); renderLot() } }
+  });
 }
 
 function genTop(){
@@ -2055,17 +2120,29 @@ function pickImpStatus(btn,s){
 }
 function saveImpStatus(){
   if(!lotStTarget||!impStPick) { toast('Pick a status first.',true); return }
-  api('dashImpoundStatus',[lotStTarget,impStPick,$('impStNote').value,KEYV()],function(r){
-    toast(r.note||'Saved.');
-    closeSheets(); applyImpResult(r, false);
-  }, false, 'Saving');
+  setImpStatus(lotStTarget, impStPick, $('impStNote').value);
 }
 function quickGoa(){
   if(!LOTDET) return;
-  api('dashImpoundStatus',[LOTDET.id,'GOA','',KEYV()],function(r){
-    toast(r.note||'Marked GOA.');
-    closeSheets(); applyImpResult(r, false);
-  }, false, 'Saving');
+  setImpStatus(LOTDET.id, 'GOA', '');
+}
+/* v4.5 optimistic status change: the list row flips now, sheet closes, the
+   server's verdict (and any freshly minted IT number) lands in the toast. */
+function setImpStatus(id, status, note){
+  var lotRow=(LOT&&LOT.rows||[]).filter(function(x){ return x.id===id })[0];
+  var rowBefore=lotRow?JSON.parse(JSON.stringify(lotRow)):null;
+  var active=['INTAKE','NOTIFIED','NOTICED','REDEMPTION','SALE_ELIGIBLE','PUBLISHED','HEARING','UNKNOWN_DISPOSITION'];
+  closeSheets();
+  optimistic({
+    apply: function(){
+      if(lotRow){ lotRow.status=status; lotRow.custody=active.indexOf(status)>=0; lotRow.working=lotRow.custody&&status!=='UNKNOWN_DISPOSITION'; renderLot() }
+      if(LOTDET&&LOTDET.id===id){ LOTDET.status=status; LOTDET.status_label=(LOTDET.labels&&LOTDET.labels[status])||status }
+    },
+    revert: function(){ if(lotRow&&rowBefore){ Object.keys(rowBefore).forEach(function(k){ lotRow[k]=rowBefore[k] }); renderLot() } if(LOTDET&&LOTDET.id===id&&rowBefore){ LOTDET.status=rowBefore.status } },
+    refresh: function(){ loadLot(true) },
+    fn:'dashImpoundStatus', args:[id,status,note,KEYV()],
+    ok: function(r){ toast(r.note||'Saved.'); applyImpResult(r, false) }
+  });
 }
 
 </script>
