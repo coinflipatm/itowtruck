@@ -13,7 +13,10 @@ export async function onRequestGet(context) {
   const fn = url.searchParams.get('fn') || '';
   let args = [];
   try { args = JSON.parse(url.searchParams.get('args') || '[]'); } catch (e) { args = []; }
-  if (!env || !env.EDGE || !env.TOWOS_API_URL) return json({ ok: false, error: 'edge not configured' }, 503, { 'x-towos-edge': 'unconfigured' });
+  if (!env || !env.EDGE || !env.TOWOS_API_URL) {
+    const missing = [!env || !env.EDGE ? 'EDGE binding' : null, !env || !env.TOWOS_API_URL ? 'TOWOS_API_URL' : null].filter(Boolean);
+    return json({ ok: false, error: 'edge not configured: missing ' + missing.join(', ') }, 503, { 'x-towos-edge': 'unconfigured' });
+  }
 
   const key = keyOf(fn, args);
   const keyHash = key ? await sha256(key) : '';
