@@ -761,11 +761,14 @@ var STAGES=['New','Reviewing','Contacted','Interviewed','Rejected'];
 /* ==========================================================
    SHEETS + CONFIRM (no native confirm/prompt anywhere)
    ========================================================== */
-var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm'];
+var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus'];
 function openSheet(id){ $('ov').className='ov on'; $(id).className='sheet on' }
 function closeSheets(){
   $('ov').className='ov';
-  SHEET_IDS.forEach(function(i){ $(i).className='sheet' });
+  SHEET_IDS.forEach(function(i){ var el=$(i); if(el) el.className='sheet' });
+  /* belt and braces: any .sheet.on not in the list (the Lot tab's shImp/shImpStatus
+     were missed once) closes too, so a forgotten id can never strand a sheet again */
+  var open=document.querySelectorAll('.sheet.on'); for(var k=0;k<open.length;k++) open[k].className='sheet';
 }
 /* confirm({title, body, okText, danger, input:{label,placeholder,required}}, cb) */
 function confirmSheet(o,cb){
