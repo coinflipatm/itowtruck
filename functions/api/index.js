@@ -5,12 +5,13 @@
  * The envelope gains one field, edge: { hit, age_s | upstream_ms }, which the
  * dash's ?perf=1 pill shows. Nothing else about the shape changes.
  */
-import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite } from '../_edge.js';
+import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite, getGen } from '../_edge.js';
 
 /** Refetch the reads a write just invalidated, for the writer's key, and cache them. */
-async function prewarm(env, groups, key, keyHash) {
+async function prewarm(env, groups, key, keyHash, hints) {
   const plan = [];
-  if (groups.indexOf('board') >= 0) { plan.push(['dashInit', [key, 0]]); plan.push(['dashShifts', [key]]); }
+  // shifts first: after a shift fix the dash refetches shifts before the board
+  if (groups.indexOf('board') >= 0) { plan.push(['dashShifts', [key]]); plan.push(['dashInit', [key, 0]]); }
   if (groups.indexOf('lot') >= 0) plan.push(['dashImpounds', [key]]);
   if (groups.indexOf('appl') >= 0) plan.push(['dashApplicants', [key]]);
   if (groups.indexOf('config') >= 0) plan.push(['dashConfigList', [key]]);
@@ -19,9 +20,16 @@ async function prewarm(env, groups, key, keyHash) {
     const r = await upstream(env, qs);
     let o = null; try { o = JSON.parse(r.text); } catch (e) {}
     if (!o || !o.ok) continue;
-    const ck = await cacheKey(env, fn, args, keyHash);
+    const ck = await cacheKey(env, fn, args, keyHash, hints);
     await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: READ_FNS[fn][1] });
   }
+}
+
+/** The gens the caller should carry forward, for the groups touched. */
+async function gensFor(env, groups, hints) {
+  const out = {};
+  for (const g of groups) out[g] = await getGen(env, g, hints);
+  return out;
 }
 
 export async function onRequestGet(context) {
@@ -30,6 +38,8 @@ export async function onRequestGet(context) {
   const fn = url.searchParams.get('fn') || '';
   let args = [];
   try { args = JSON.parse(url.searchParams.get('args') || '[]'); } catch (e) { args = []; }
+  let hints = {};
+  try { hints = JSON.parse(url.searchParams.get('egen') || '{}') || {}; } catch (e) { hints = {}; }
   if (!env || !env.EDGE || !env.TOWOS_API_URL) {
     const missing = [!env || !env.EDGE ? 'EDGE binding' : null, !env || !env.TOWOS_API_URL ? 'TOWOS_API_URL' : null].filter(Boolean);
     return json({ ok: false, error: 'edge not configured: missing ' + missing.join(', ') }, 503, { 'x-towos-edge': 'unconfigured' });
@@ -46,11 +56,11 @@ export async function onRequestGet(context) {
     let ck = null;
     try {
       if (await isTrusted(env, keyHash)) {
-        ck = await cacheKey(env, fn, args, keyHash);
+        ck = await cacheKey(env, fn, args, keyHash, hints);
         const hit = await env.EDGE.get(ck);
         if (hit) {
           const o = JSON.parse(hit);
-          o.edge = { hit: true, age_s: Math.round((Date.now() - (o.at || Date.now())) / 1000), ms: Date.now() - t0 };
+          o.edge = { hit: true, age_s: Math.round((Date.now() - (o.at || Date.now())) / 1000), ms: Date.now() - t0, gens: await gensFor(env, [spec[0]], hints) };
           delete o.at;
           return json(o, 200, { 'x-towos-edge': 'hit' });
         }
@@ -64,11 +74,12 @@ export async function onRequestGet(context) {
     if (o.ok) {
       try {
         await markTrusted(env, keyHash);
-        if (!ck) ck = await cacheKey(env, fn, args, keyHash);
+        if (!ck) ck = await cacheKey(env, fn, args, keyHash, hints);
         await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: spec[1] });
       } catch (e) {}
     }
     o.edge = { hit: false, upstream_ms: Date.now() - t0 };
+    try { o.edge.gens = await gensFor(env, [spec[0]], hints); } catch (e) {}
     return json(o, 200, { 'x-towos-edge': 'miss' });
   }
 
@@ -77,23 +88,31 @@ export async function onRequestGet(context) {
   let o;
   try { o = JSON.parse(r.text); } catch (e) { return new Response(r.text, { status: r.status, headers: { 'content-type': 'text/plain', 'x-towos-edge': 'pass-nonjson' } }); }
   if (!o || typeof o !== 'object') o = { ok: false, error: 'Empty answer from the server.' };
+  let gens = null;
   if (o.ok && keyHash) {
     try {
       await markTrusted(env, keyHash);
       if (spec) {
         // forced read: refresh the entry so the next unforced read is a hit
-        const ck = await cacheKey(env, fn, args, keyHash);
+        const ck = await cacheKey(env, fn, args, keyHash, hints);
         await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: spec[1] });
-      } else if (!(await writeThroughLot(env, o.data))) {
-        const groups = groupsForWrite(fn);
-        await bumpGens(env, groups);
-        // Prewarm: the screens this write just invalidated are refetched for
-        // this caller in the background, so his next tap is a HIT instead of
-        // a 4-7s rebuild. Runs after the response is sent (waitUntil).
-        context.waitUntil(prewarm(env, groups, key, keyHash).catch(function () {}));
+        gens = await gensFor(env, [spec[0]], hints);
+      } else {
+        const wt = await writeThroughLot(env, o.data);
+        if (wt) { gens = wt; }
+        else {
+          const groups = groupsForWrite(fn);
+          gens = await bumpGens(env, groups);
+          // Prewarm: the screens this write just invalidated are refetched for
+          // this caller in the background, so his next tap is a HIT instead of
+          // a 4-7s rebuild. Runs after the response is sent (waitUntil). The
+          // new gens are passed as hints so the POP's cached old gen is ignored.
+          context.waitUntil(prewarm(env, groups, key, keyHash, gens).catch(function () {}));
+        }
       }
     } catch (e) {}
   }
   o.edge = { hit: false, upstream_ms: Date.now() - t0, pass: true };
+  if (gens) o.edge.gens = gens;
   return json(o, 200, { 'x-towos-edge': 'pass' });
 }

@@ -592,6 +592,11 @@ var EDGE_ON = (function(){
   return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname);
 })();
 var EDGE_DOWN_UNTIL = 0;
+/* The edge tells us the cache generation of each group it touched; we send it
+   back on every read so our own writes are never answered from a stale entry
+   (KV caches reads at the POP for ~60s; the larger gen wins server-side). */
+var EDGE_GENS = {};
+function edgeNote(j){ try{ if(j&&j.edge&&j.edge.gens){ Object.keys(j.edge.gens).forEach(function(g){ if(Number(j.edge.gens[g])>Number(EDGE_GENS[g]||0)) EDGE_GENS[g]=j.edge.gens[g] }) } }catch(e){} }
 
 /* ==========================================================
    AUTH
@@ -662,7 +667,7 @@ var READ_FNS = { dashInit:1, dashDay:1, dashApplicants:1, dashApplicant:1,
 
 function apiFetch(qs,attempt,retryOk){
   var viaEdge = EDGE_ON && Date.now()>EDGE_DOWN_UNTIL;
-  var url = (viaEdge ? EDGE_URL : API_URL)+'?'+qs;
+  var url = (viaEdge ? EDGE_URL : API_URL)+'?'+qs+(viaEdge?'&egen='+encodeURIComponent(JSON.stringify(EDGE_GENS)):'');
   return fetch(url).then(function(r){
     return r.text().then(function(txt){ return { status:r.status, txt:txt } });
   }).then(function(res){
@@ -676,6 +681,7 @@ function apiFetch(qs,attempt,retryOk){
       if(res.status===503 || res.status===404 || retryOk) return apiFetch(qs,attempt,retryOk);
     }
     if(j===null) throw new Error('NONJSON:'+res.txt.substring(0,80));
+    edgeNote(j);
     return j;
   }).catch(function(e){
     if(retryOk && attempt<1) return new Promise(function(res){ setTimeout(res,1500) })
@@ -1600,6 +1606,12 @@ function loadShifts(){
     SH=s; if(!selShiftDriver) selShiftDriver=selDriver; renderShifts();
   }, false, 'Loading shifts');
 }
+/* same, no spinner: used after an optimistic write to pull the server's truth (hours, totals) */
+function loadShiftsQuiet(){
+  api('dashShifts',[wkOff,KEYV()],function(s){
+    SH=s; if(!selShiftDriver) selShiftDriver=selDriver; if($('vShifts').style.display!=='none') renderShifts();
+  }, true, '');
+}
 function wkNav(d){ if(wkOff+d>0) return; wkOff+=d; SH=null; loadShifts() }
 function renderShifts(){
   $('wkLabel').textContent=(wkOff===0?'This week · ':wkOff===-1?'Last week · ':'')+SH.label;
@@ -1659,7 +1671,7 @@ function saveShift(){
   var setTimes=function(t){ if(row){ row.inT=t.inT; row.outT=t.outT } if(SH) renderShifts() };
   closeSheets();
   var run=function(i){
-    if(i>=jobs.length){ toast('Saved'); SH=null; TD=null; loadShifts(); return }
+    if(i>=jobs.length){ toast('Saved'); TD=null; setTimeout(function(){ SH=null; loadShiftsQuiet() }, 4000); return }
     optimistic({
       apply: function(){ if(i===0){ var t={inT:was.inT,outT:was.outT}; jobs.forEach(function(j){ if(j[0]==='clock_in') t.inT=j[1]; else t.outT=j[1] }); setTimes(t) } },
       revert: function(){ setTimes(was) },

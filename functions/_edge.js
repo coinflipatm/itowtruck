@@ -26,8 +26,10 @@
 
 export const READ_FNS = {
   // fn: [group, ttlSeconds, perKey]
-  dashInit:       ['board', 45, true],
-  dashDay:        ['board', 45, false],
+  // KV refuses expirationTtl under 60s (the put throws, silently, and the
+  // entry is never written -- dashInit never hit until this was 60).
+  dashInit:       ['board', 60, true],
+  dashDay:        ['board', 60, false],
   dashShifts:     ['board', 90, false],
   dashApplicants: ['appl', 300, false],
   dashApplicant:  ['appl', 300, false],
@@ -67,9 +69,19 @@ export function argsSansKey(fn, args) {
   return args.filter((_, i) => i !== pos);
 }
 
-export async function getGen(env, group) {
+/**
+ * Current generation of a group. KV reads are cached at the POP for ~60s, so
+ * right after a write the writer's own reads could still see the OLD gen and
+ * hit a stale entry. The dash therefore sends back the gens it was last told
+ * (egen=...), and the larger of the two wins: the writer is always current,
+ * another device is at worst ~60s behind, and a made-up huge hint can only
+ * cause misses, never a stale hit.
+ */
+export async function getGen(env, group, hints) {
   const v = await env.EDGE.get('gen:' + group);
-  return v || '0';
+  const kv = v || '0';
+  const h = hints && hints[group] != null ? String(hints[group]) : '0';
+  return (Number(h) > Number(kv)) ? h : kv;
 }
 
 export async function bumpGens(env, groups) {
@@ -83,9 +95,9 @@ export async function bumpGens(env, groups) {
   return out;
 }
 
-export async function cacheKey(env, fn, args, keyHash) {
+export async function cacheKey(env, fn, args, keyHash, hints) {
   const spec = READ_FNS[fn];
-  const gen = await getGen(env, spec[0]);
+  const gen = await getGen(env, spec[0], hints);
   const body = JSON.stringify(argsSansKey(fn, args));
   const h = await sha256(body);
   return 'c:' + spec[0] + ':' + gen + ':' + fn + ':' + h.slice(0, 24) + (spec[2] ? ':' + keyHash.slice(0, 24) : '');
@@ -134,5 +146,5 @@ export async function writeThroughLot(env, data) {
   const now = Date.now();
   await env.EDGE.put('c:lot:' + gen + ':dashImpounds:' + hLot.slice(0, 24), JSON.stringify({ ok: true, data: data.lot, at: now }), { expirationTtl: lotSpec[1] });
   await env.EDGE.put('c:lot:' + gen + ':dashImpound:' + hDet.slice(0, 24), JSON.stringify({ ok: true, data: data.detail, at: now }), { expirationTtl: detSpec[1] });
-  return true;
+  return gens;   // truthy: the new gens, for the caller to carry forward
 }
