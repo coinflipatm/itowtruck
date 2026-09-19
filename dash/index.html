@@ -576,7 +576,22 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.3';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2)
+var FE_VERSION  = '4.4';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge
+/* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
+   answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
+   Writes pass through it untouched. If the edge is missing, unconfigured or
+   erroring, EDGE_DOWN_UNTIL parks it for 5 minutes and every call goes
+   straight to Apps Script, exactly as before v4.4. ?edge=0 forces direct. */
+var EDGE_URL = '/api';
+var EDGE_ON = (function(){
+  try{
+    var q=/[?&]edge=(\d)/.exec(location.search);
+    if(q) localStorage.setItem('towos_edge', q[1]);
+    if(localStorage.getItem('towos_edge')==='0') return false;
+  }catch(e){}
+  return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname);
+})();
+var EDGE_DOWN_UNTIL = 0;
 
 /* ==========================================================
    AUTH
@@ -645,12 +660,26 @@ var READ_FNS = { dashInit:1, dashDay:1, dashApplicants:1, dashApplicant:1,
                  dashShifts:1, dashConfigList:1, dashDiag:1,
                  dashImpounds:1, dashImpound:1 };
 
-function apiFetch(url,attempt,retryOk){
-  return fetch(url).then(function(r){ return r.text() }).then(function(txt){
-    try{ return JSON.parse(txt) }catch(e){ throw new Error('NONJSON:'+txt.substring(0,80)) }
+function apiFetch(qs,attempt,retryOk){
+  var viaEdge = EDGE_ON && Date.now()>EDGE_DOWN_UNTIL;
+  var url = (viaEdge ? EDGE_URL : API_URL)+'?'+qs;
+  return fetch(url).then(function(r){
+    return r.text().then(function(txt){ return { status:r.status, txt:txt } });
+  }).then(function(res){
+    var j; try{ j=JSON.parse(res.txt) }catch(e){ j=null }
+    if(viaEdge && (res.status>=500 || (res.status===503) || (j===null))){
+      /* The edge itself failed (not deployed, unconfigured, Cloudflare error page).
+         A 503 from /api is sent BEFORE the edge talks to Google, so it is safe to
+         resend even a write. Anything else falls to the normal NONJSON handling
+         below, which never blindly repeats a write. */
+      EDGE_DOWN_UNTIL = Date.now()+300000;
+      if(res.status===503 || res.status===404 || retryOk) return apiFetch(qs,attempt,retryOk);
+    }
+    if(j===null) throw new Error('NONJSON:'+res.txt.substring(0,80));
+    return j;
   }).catch(function(e){
     if(retryOk && attempt<1) return new Promise(function(res){ setTimeout(res,1500) })
-      .then(function(){ return apiFetch(url,attempt+1,retryOk) });
+      .then(function(){ return apiFetch(qs,attempt+1,retryOk) });
     throw e;
   });
 }
@@ -671,11 +700,12 @@ var PERF = (function(){
   }catch(e){ return false }
 })();
 var PERF_LOG = [];
-function perfNote(fn, wall, data, err){
+function perfNote(fn, wall, data, err, edge){
   var srv = (data && data.t && typeof data.t==='object') ? data.t : null;
   var rec = { at:new Date().toTimeString().slice(0,8), fn:fn, wall:Math.round(wall),
               srv: srv ? Math.round((srv.verify||0)+(srv.sheets||0)) : null,
-              cached: srv ? !!srv.cached : null, err: err?1:0 };
+              cached: srv ? !!srv.cached : null, err: err?1:0,
+              edge: edge ? (edge.hit ? 'HIT' : (edge.pass ? 'pass' : 'miss')) : (EDGE_ON ? 'direct' : '') };
   PERF_LOG.push(rec); if(PERF_LOG.length>40) PERF_LOG.shift();
   try{ console.log('[perf]', rec.fn, rec.wall+'ms', rec.srv!=null?('srv '+rec.srv+'ms'+(rec.cached?' cached':'')):'', err?'ERR':''); }catch(e){}
   if(!PERF) return;
@@ -684,7 +714,7 @@ function perfNote(fn, wall, data, err){
     el=document.createElement('div'); el.id='perfPill';
     el.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9999;background:#111;color:#8f8;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;opacity:.92;max-width:72vw;white-space:pre-wrap';
     el.onclick=function(){
-      var txt=PERF_LOG.map(function(r){ return r.at+' '+r.fn+' '+r.wall+'ms'+(r.srv!=null?' srv'+r.srv+(r.cached?'c':''):'')+(r.err?' ERR':''); }).join('\n');
+      var txt=PERF_LOG.map(function(r){ return r.at+' '+r.fn+' '+r.wall+'ms'+(r.edge?' '+r.edge:'')+(r.srv!=null?' srv'+r.srv+(r.cached?'c':''):'')+(r.err?' ERR':''); }).join('\n');
       var done=function(){ toast('Perf log copied ('+PERF_LOG.length+')') };
       try{ navigator.clipboard.writeText(txt).then(done, function(){ prompt('Perf log', txt) }); }catch(e){ prompt('Perf log', txt) }
     };
@@ -692,7 +722,7 @@ function perfNote(fn, wall, data, err){
   }
   var walls=PERF_LOG.map(function(r){return r.wall}).sort(function(a,b){return a-b});
   var med=walls[Math.floor(walls.length/2)];
-  el.textContent=rec.fn+' '+rec.wall+'ms'+(rec.srv!=null?'  srv '+rec.srv+'ms'+(rec.cached?' (cached)':''):'')+'\nmed '+med+'ms  n='+PERF_LOG.length+'  tap=copy';
+  el.textContent=rec.fn+' '+rec.wall+'ms'+(rec.edge?' '+rec.edge:'')+(rec.srv!=null?'  srv '+rec.srv+'ms'+(rec.cached?' (cached)':''):'')+'\nmed '+med+'ms  n='+PERF_LOG.length+'  tap=copy';
 }
 
 /* PENDING ref-counts in-flight requests so a response arriving while another
@@ -714,10 +744,10 @@ function api(fn,args,ok,quiet,msg){
   }
   var pnow=function(){ return (window.performance&&performance.now)?performance.now():Date.now() };
   var pt0=pnow(), pnoted=false;
-  var pnote=function(data,err){ if(pnoted) return; pnoted=true; perfNote(fn, pnow()-pt0, data, err); };
-  apiFetch(API_URL+'?api=1&fn='+encodeURIComponent(fn)+'&args='+encodeURIComponent(JSON.stringify(args)),0,isRead)
+  var pnote=function(data,err,edge){ if(pnoted) return; pnoted=true; perfNote(fn, pnow()-pt0, data, err, edge); };
+  apiFetch('api=1&fn='+encodeURIComponent(fn)+'&args='+encodeURIComponent(JSON.stringify(args)),0,isRead)
     .then(function(j){
-      pnote(j&&j.data, !j.ok);
+      pnote(j&&j.data, !j.ok, j&&j.edge);
       if(!j.ok) throw new Error(j.error||'Request failed');
       settle(); ok(j.data);
     })
