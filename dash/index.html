@@ -376,6 +376,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
              oninput="renderLot()" autocomplete="off">
     </div>
     <div class="chips wrap" id="lChips"></div>
+    <div id="lAuc"></div>
     <div id="lList"><div class="empty">Loading&hellip;</div></div>
   </section>
 
@@ -435,6 +436,22 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   <label>Note (optional)</label>
   <input id="impStNote" type="text" placeholder="never towed -- lot was empty">
   <button class="btn" onclick="saveImpStatus()">Save status</button>
+</div>
+
+<!-- auction day: the whole sale on one screen -->
+<div class="sheet" id="shAuc">
+  <button class="close" onclick="closeSheets()">&times;</button>
+  <h3 id="aucName">Auction</h3>
+  <div class="shsub" id="aucSub"></div>
+  <div id="aucBody"></div>
+</div>
+
+<!-- one vehicle's outcome -->
+<div class="sheet" id="shAucV">
+  <button class="close" onclick="closeSheet('shAucV')">&times;</button>
+  <h3 id="aucVName"></h3>
+  <div class="shsub" id="aucVSub"></div>
+  <div id="aucVBody"></div>
 </div>
 
 <!-- applicant note -->
@@ -576,7 +593,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.6';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes
+var FE_VERSION  = '4.7';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -827,8 +844,12 @@ var STAGES=['New','Reviewing','Contacted','Interviewed','Rejected'];
 /* ==========================================================
    SHEETS + CONFIRM (no native confirm/prompt anywhere)
    ========================================================== */
-var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus'];
+var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus','shAuc','shAucV'];
 function openSheet(id){ $('ov').className='ov on'; $(id).className='sheet on' }
+/* close ONE sheet and leave what was under it open -- the auction screen opens
+   a vehicle on top of itself, and saving should drop back to the list, not to
+   the lot. */
+function closeSheet(id){ var el=$(id); if(el) el.className='sheet' }
 function closeSheets(){
   $('ov').className='ov';
   SHEET_IDS.forEach(function(i){ var el=$(i); if(el) el.className='sheet' });
@@ -1822,6 +1843,7 @@ var LOT_FILTERS=[
 
 function loadLot(quiet){
   api('dashImpounds',[KEYV()],function(d){ LOT=d; renderLotChips(); renderLot() }, quiet, 'Loading lot');
+  loadAuc(true);
 }
 function lotSetFilter(f){ lotFilter=f; renderLotChips(); renderLot() }
 
@@ -2154,6 +2176,245 @@ function setImpStatus(id, status, note){
     refresh: function(){ loadLot(true) },
     fn:'dashImpoundStatus', args:[id,status,note,KEYV()],
     ok: function(r){ toast(r.note||'Saved.'); applyImpResult(r, false) }
+  });
+}
+
+/* ==========================================================
+   AUCTION -- the close-out
+
+   Once a month the lot turns into a sale. The screen has to work
+   standing in the yard with a phone in one hand: one tap per vehicle
+   for what happened to it, and the paperwork the police and the state
+   want comes out of those taps rather than out of a second evening at
+   the desk.
+
+   Most vehicles are not sold. They draw no bid and iTow keeps them as
+   custodian against charges that passed their value months ago, which
+   is why "Kept" is a single tap with nothing to fill in, and why the
+   surplus line is almost always zero -- but it is still computed and
+   printed on every vehicle, because the record that nobody was owed
+   anything is the thing that answers the question two years later.
+   ========================================================== */
+var AUC=null, aucV=null, aucOutcome=null;
+
+function loadAuc(quiet){
+  api('dashAuction',['',KEYV()],function(d){ AUC=d; renderAucBanner(); if($('shAuc').className.indexOf('on')>=0) renderAuc() },
+      true, '', function(){ AUC=null; renderAucBanner() });
+}
+
+/* The banner on the Lot tab: only when there is an auction still open.
+   It is the way in, and it doubles as the countdown. */
+function renderAucBanner(){
+  var el=$('lAuc'); if(!el) return;
+  if(!AUC||!AUC.auction||AUC.auction.status==='CLOSED'||!AUC.vehicles.length){ el.innerHTML=''; return }
+  var a=AUC.auction, t=AUC.tally, done=t.total-t.pending;
+  el.innerHTML='<div class="card" onclick="openAuc()" style="border-color:var(--white)">'+
+    '<div class="row"><div class="nm">Auction '+esc(a.date_us||a.date)+(a.time?' '+esc(fmtT(a.time)):'')+'</div>'+
+      '<span class="pill '+(t.pending?'warn':'ok')+'">'+(t.pending?t.pending+' to call':'all called')+'</span></div>'+
+    '<div class="sub2">'+t.total+' vehicle'+(t.total===1?'':'s')+(a.location?' · '+esc(a.location):'')+'</div>'+
+    (done?'<div class="sub2">'+t.sold+' sold · '+t.transferred+' kept · '+t.scrapped+' scrapped · '+t.no_sale+' no sale</div>':'')+
+  '</div>';
+}
+
+function openAuc(){ if(!AUC) { toast('No auction loaded.',true); return } renderAuc(); openSheet('shAuc') }
+
+function aucPill(o){
+  var lab=(AUC&&AUC.labels&&AUC.labels[o])||o, cls='dim';
+  if(o==='SOLD') cls='ok'; else if(o==='TRANSFERRED') cls='info';
+  else if(o==='SCRAPPED') cls='purple'; else if(o==='NO_SALE') cls='warn';
+  return '<span class="pill '+cls+'">'+esc(lab)+'</span>';
+}
+
+function renderAuc(){
+  if(!AUC) return;
+  var a=AUC.auction, t=AUC.tally;
+  $('aucName').textContent='Auction '+(a.date_us||a.date);
+  $('aucSub').textContent=(a.time?fmtT(a.time)+' · ':'')+(a.location||'')+' · '+a.id;
+  var h='';
+
+  h+='<div class="block"><span class="lbl">Where it stands</span>';
+  h+='<div class="sub2">'+t.total+' listed · '+t.sold+' sold · '+t.transferred+' kept · '+t.scrapped+' scrapped · '+t.no_sale+' no sale'+
+     (t.pending?' · <b>'+t.pending+' still to call</b>':'')+'</div>';
+  if(t.gross>0) h+='<div class="sub2">Took in '+money(t.gross)+(t.surplus>0?' · surplus to hold '+money(t.surplus):' · no surplus')+'</div>';
+  h+='</div>';
+
+  if(AUC.excluded&&AUC.excluded.length){
+    h+='<div class="block"><span class="lbl">Not in the sale</span>';
+    AUC.excluded.forEach(function(x){
+      h+='<div class="sub2">'+esc((x.it||('call '+x.call))+' '+(x.vehicle||''))+' is marked '+esc(x.status)+
+         ' — take the auction off that row on the Lot screen before closing.</div>';
+    });
+    h+='</div>';
+  }
+
+  h+='<div class="block"><span class="lbl">Vehicles</span>';
+  AUC.vehicles.forEach(function(v){
+    var line=[v.it||('call '+v.call)];
+    if(v.plate) line.push(v.plate);
+    if(v.vin) line.push(v.vin.slice(-6));
+    h+='<div class="card" onclick="openAucV(\''+esc(v.id)+'\')">'+
+      '<div class="row"><div class="nm">'+esc(v.vehicle||'Unknown vehicle')+'</div>'+aucPill(v.outcome)+'</div>'+
+      '<div class="sub mono">'+esc(line.join(' · '))+'</div>'+
+      '<div class="sub2">'+esc(v.juris||'no department set')+' · owed '+money(v.balance)+'</div>'+
+      (v.sale&&v.sale.buyer_name?'<div class="sub2">'+esc(v.sale.buyer_name)+(v.sale.amount>0?' — '+money(v.sale.amount):'')+'</div>':'')+
+    '</div>';
+  });
+  h+='</div>';
+
+  h+='<div class="block"><span class="lbl">Paperwork</span>';
+  h+='<button class="btn sec sm" onclick="aucNotices()">Print the police notices</button>';
+  h+='<div class="sub2">One page per department, listing every vehicle of theirs that went — so they cancel the LEIN entries. Report each disposition on SOS e-Services after.</div>';
+  if(AUC.departments&&AUC.departments.length){
+    AUC.departments.forEach(function(d){
+      h+='<div class="sub2">'+esc(d.name)+' ('+d.count+')'+
+         (d.notice_url?' — <a href="'+esc(d.notice_url)+'" target="_blank" rel="noopener">notice</a>':' — not printed')+
+         (d.fax?' · fax '+esc(d.fax):'')+(d.email?' · '+esc(d.email):'')+'</div>';
+    });
+  }
+  h+='</div>';
+
+  h+='<div class="block"><span class="lbl">Close it out</span>';
+  if(a.status==='CLOSED'){
+    h+='<div class="sub2">Closed.'+(a.settlement_url?' <a href="'+esc(a.settlement_url)+'" target="_blank" rel="noopener">Settlement sheet</a>':'')+'</div>';
+  } else {
+    h+='<button class="btn'+(t.pending?' sec':'')+'" onclick="aucClose()">Close the auction</button>';
+    h+='<div class="sub2">'+(t.pending?'Every vehicle needs an outcome first.':'Writes the settlement sheet — what each one brought, what was owed on it, and what was left for anybody else. Anything that did not sell goes back on the list for next time.')+'</div>';
+  }
+  h+='</div>';
+
+  $('aucBody').innerHTML=h;
+}
+
+function money(n){
+  n=Number(n)||0;
+  return '$'+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+
+/* ---------- one vehicle ---------- */
+function openAucV(id){
+  aucV=(AUC&&AUC.vehicles||[]).filter(function(x){ return x.id===id })[0];
+  if(!aucV) return;
+  aucOutcome=(aucV.outcome==='PENDING')?null:aucV.outcome;
+  $('aucVName').textContent=aucV.vehicle||'Unknown vehicle';
+  $('aucVSub').textContent=(aucV.it||('call '+aucV.call))+' · '+(aucV.plate||aucV.vin||'no plate')+' · owed '+money(aucV.balance);
+  renderAucV();
+  openSheet('shAucV');
+}
+
+function renderAucV(){
+  if(!aucV) return;
+  var s=aucV.sale||{}, h='';
+  h+='<div class="block"><span class="lbl">What happened to it</span>';
+  ['SOLD','TRANSFERRED','SCRAPPED','NO_SALE'].forEach(function(o){
+    h+='<button class="btn'+(aucOutcome===o?'':' sec')+' sm" onclick="pickAucOutcome(\''+o+'\')">'+
+       esc((AUC.labels&&AUC.labels[o])||o)+'</button>';
+  });
+  h+='</div>';
+
+  if(aucOutcome==='SOLD'||aucOutcome==='SCRAPPED'){
+    h+='<div class="block"><span class="lbl">'+(aucOutcome==='SOLD'?'Who bought it':'Which yard took it')+'</span>';
+    h+=fld('a_buyer','Name',s.buyer_name,aucOutcome==='SOLD'?'Ray Mendez':'Padnos');
+    h+=fld('a_phone','Phone',s.buyer_phone,'810-555-0123','tel');
+    if(aucOutcome==='SOLD') h+=fld('a_addr','Address',s.buyer_addr,'for the bill of sale');
+    h+='<div class="two"><div>'+fld('a_amount','What it brought',s.amount>0?String(s.amount):'','650','text')+'</div>'+
+       '<div><label for="a_payment">Paid</label><select id="a_payment">'+
+       ['','CASH','CARD','CHECK','ZELLE','OTHER'].map(function(x){
+         return '<option value="'+x+'"'+(x===(s.payment||'')?' selected':'')+'>'+(x?x.charAt(0)+x.slice(1).toLowerCase():'—')+'</option>';
+       }).join('')+'</select></div></div>';
+    h+='<div class="sub2">'+money(aucV.balance)+' is owed on this one, so the whole '+
+       (aucOutcome==='SOLD'?'sale price':'scrap value')+' goes against towing and storage unless it clears that. Nothing to work out here.</div>';
+    h+='</div>';
+  } else if(aucOutcome==='TRANSFERRED'){
+    h+='<div class="block"><span class="lbl">Kept</span>';
+    h+='<div class="sub2">No bid, so iTow takes it as custodian against the '+money(aucV.balance)+' already owed on it. The department still gets a notice so the LEIN entry comes off.</div>';
+    h+=fld('a_amount','Credited (leave blank for none)',s.amount>0?String(s.amount):'','','text');
+    h+='</div>';
+  } else if(aucOutcome==='NO_SALE'){
+    h+='<div class="block"><span class="lbl">No sale</span>';
+    h+='<div class="sub2">Stays in the lot and on this auction. When the auction closes it goes back on the list for the next one.</div>';
+    h+='</div>';
+  }
+
+  if(aucOutcome){
+    h+='<div class="block">'+fld('a_notes','Note (optional)',s.notes,'')+
+       '<button class="btn" onclick="saveAucOutcome()">Save</button></div>';
+  }
+  if(aucV.outcome!=='PENDING'){
+    h+='<div class="block"><button class="btn sec sm" onclick="undoAucOutcome()">Undo — put it back on the block</button></div>';
+  }
+  $('aucVBody').innerHTML=h;
+}
+
+function pickAucOutcome(o){ aucOutcome=o; renderAucV() }
+
+function saveAucOutcome(){
+  if(!aucV||!aucOutcome) return;
+  var f={ notes:($('a_notes')?$('a_notes').value:'') };
+  if($('a_buyer'))   f.buyer_name=$('a_buyer').value.trim();
+  if($('a_phone'))   f.buyer_phone=$('a_phone').value.trim();
+  if($('a_addr'))    f.buyer_addr=$('a_addr').value.trim();
+  if($('a_amount'))  f.amount=$('a_amount').value.trim();
+  if($('a_payment')) f.payment=$('a_payment').value;
+  sendAucOutcome(aucV.id, aucOutcome, f);
+}
+function undoAucOutcome(){ if(aucV) sendAucOutcome(aucV.id,'PENDING',{}) }
+
+/* Optimistic: the chip flips and the sheet closes on the tap. A refusal --
+   no buyer, no money, auction already closed -- puts it back and says why. */
+function sendAucOutcome(id, outcome, fields){
+  var v=(AUC&&AUC.vehicles||[]).filter(function(x){ return x.id===id })[0];
+  var before=v?JSON.parse(JSON.stringify(v)):null;
+  closeSheet('shAucV');
+  optimistic({
+    apply: function(){ if(v){ v.outcome=outcome; aucTally(); renderAuc(); renderAucBanner() } },
+    revert: function(){ if(v&&before){ Object.keys(before).forEach(function(k){ v[k]=before[k] }); aucTally(); renderAuc(); renderAucBanner() } },
+    refresh: function(){ loadAuc(true) },
+    fn:'dashAuctionOutcome', args:[id,outcome,fields,KEYV()],
+    ok: function(r){ toast(r.note||'Saved.'); if(r.auction){ AUC=r.auction; renderAuc(); renderAucBanner() } loadLot(true) }
+  });
+}
+
+/* Local retally so the optimistic flip is not lying about the counts. */
+function aucTally(){
+  if(!AUC) return;
+  var t={ total:0, sold:0, scrapped:0, transferred:0, no_sale:0, pending:0,
+          gross:AUC.tally.gross, towing:AUC.tally.towing, expenses:AUC.tally.expenses,
+          sos_fee:AUC.tally.sos_fee, surplus:AUC.tally.surplus };
+  AUC.vehicles.forEach(function(v){
+    t.total++;
+    if(v.outcome==='SOLD') t.sold++;
+    else if(v.outcome==='SCRAPPED') t.scrapped++;
+    else if(v.outcome==='TRANSFERRED') t.transferred++;
+    else if(v.outcome==='NO_SALE') t.no_sale++;
+    else t.pending++;
+  });
+  AUC.tally=t;
+}
+
+function aucNotices(){
+  api('dashAuctionNotices',[(AUC&&AUC.auction.id)||'',KEYV()],function(r){
+    toast(r.note||'Done.');
+    if(r.auction){ AUC=r.auction; renderAuc(); renderAucBanner() }
+    if(r.made&&r.made.length===1) window.open(r.made[0].url,'_blank');
+  }, false, 'Printing notices');
+}
+
+function aucClose(){
+  if(!AUC) return;
+  var t=AUC.tally;
+  if(t.pending){ toast(t.pending+' still to call.',true); return }
+  confirmSheet({
+    title:'Close the auction?',
+    body:t.sold+' sold, '+t.transferred+' kept, '+t.scrapped+' scrapped, '+t.no_sale+' no sale. '+
+         'This writes the settlement sheet and puts anything that did not sell back on the list for next time.',
+    okText:'Close it'
+  }, function(){
+    api('dashAuctionClose',[AUC.auction.id,KEYV()],function(r){
+      toast(r.note||'Closed.');
+      if(r.auction){ AUC=r.auction; renderAuc(); renderAucBanner() }
+      loadLot(true);
+      if(r.url) window.open(r.url,'_blank');
+    }, false, 'Closing out');
   });
 }
 
