@@ -35,7 +35,8 @@ export const READ_FNS = {
   dashApplicant:  ['appl', 300, false],
   dashConfigList: ['config', 600, false],
   dashImpounds:   ['lot', 300, false],
-  dashImpound:    ['lot', 300, false]
+  dashImpound:    ['lot', 300, false],
+  dashAuction:    ['lot', 300, false]
 };
 
 export const GROUPS = ['board', 'appl', 'config', 'lot', 'auth'];
@@ -45,7 +46,7 @@ const KEY_POS = { dashInit: 0 };
 
 /** Which group(s) a write invalidates. Anything unknown bumps everything but auth. */
 export function groupsForWrite(fn) {
-  if (/Impound/.test(fn)) return ['lot'];                 // the board does not show the lot
+  if (/Impound|Auction/.test(fn)) return ['lot'];         // the board does not show the lot
   if (/Applicant|Hire/.test(fn)) return ['appl', 'board']; // a hire changes the roster
   if (/Config/.test(fn)) return ['config', 'board'];
   if (/Punch|Shift|Schedule|Exception|Driver|Alias/.test(fn)) return ['board'];
@@ -137,7 +138,9 @@ export function json(obj, status, extraHeaders) {
  * fresh payloads under the new gen, so the next tap is a hit AND current.
  */
 export async function writeThroughLot(env, data) {
-  if (!data || !data.detail || !data.lot) return false;
+  if (!data) return false;
+  if (data.auction && data.auction.auction && data.auction.vehicles) return writeThroughAuction(env, data.auction);
+  if (!data.detail || !data.lot) return false;
   const gens = await bumpGens(env, ['lot']);
   const gen = gens.lot;
   const lotSpec = READ_FNS.dashImpounds, detSpec = READ_FNS.dashImpound;
@@ -147,4 +150,18 @@ export async function writeThroughLot(env, data) {
   await env.EDGE.put('c:lot:' + gen + ':dashImpounds:' + hLot.slice(0, 24), JSON.stringify({ ok: true, data: data.lot, at: now }), { expirationTtl: lotSpec[1] });
   await env.EDGE.put('c:lot:' + gen + ':dashImpound:' + hDet.slice(0, 24), JSON.stringify({ ok: true, data: data.detail, at: now }), { expirationTtl: detSpec[1] });
   return gens;   // truthy: the new gens, for the caller to carry forward
+}
+
+/**
+ * An auction write (29 v1.0) answers with the whole redrawn screen. Store it
+ * under the new lot gen as the answer to dashAuction('') so the dash's own
+ * refetch is a HIT instead of a 15s rebuild on a busy morning -- which is
+ * what killed the screen mid-auction on 9/22. The lot list itself is left to
+ * the prewarm; the auction is the thing on screen.
+ */
+export async function writeThroughAuction(env, view) {
+  const gens = await bumpGens(env, ['lot']);
+  const h = await sha256(JSON.stringify(['']));
+  await env.EDGE.put('c:lot:' + gens.lot + ':dashAuction:' + h.slice(0, 24), JSON.stringify({ ok: true, data: view, at: Date.now() }), { expirationTtl: READ_FNS.dashAuction[1] });
+  return gens;
 }

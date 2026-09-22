@@ -7,22 +7,30 @@
  */
 import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite, getGen } from '../_edge.js';
 
-/** Refetch the reads a write just invalidated, for the writer's key, and cache them. */
-async function prewarm(env, groups, key, keyHash, hints) {
+/**
+ * Refetch the reads a write just invalidated, for the writer's key, and cache
+ * them. In parallel: each is its own Apps Script execution, and run one after
+ * another on a slow morning they blow past the ~30s waitUntil budget and the
+ * later ones never land (9/22). skipInit: the login seeding has just cached
+ * dashInit itself, no point fetching it again.
+ */
+async function prewarm(env, groups, key, keyHash, hints, skip) {
+  skip = skip || {};
   const plan = [];
-  // shifts first: after a shift fix the dash refetches shifts before the board
-  if (groups.indexOf('board') >= 0) { plan.push(['dashShifts', [key]]); plan.push(['dashInit', [key, 0]]); }
-  if (groups.indexOf('lot') >= 0) plan.push(['dashImpounds', [key]]);
+  if (groups.indexOf('board') >= 0) { plan.push(['dashShifts', [key]]); if (!skip.init) plan.push(['dashInit', [key, 0]]); }
+  if (groups.indexOf('lot') >= 0) { plan.push(['dashImpounds', [key]]); if (!skip.auction) plan.push(['dashAuction', ['', key]]); }
   if (groups.indexOf('appl') >= 0) plan.push(['dashApplicants', [key]]);
   if (groups.indexOf('config') >= 0) plan.push(['dashConfigList', [key]]);
-  for (const [fn, args] of plan) {
-    const qs = new URLSearchParams({ api: '1', fn: fn, args: JSON.stringify(args) }).toString();
-    const r = await upstream(env, qs);
-    let o = null; try { o = JSON.parse(r.text); } catch (e) {}
-    if (!o || !o.ok) continue;
-    const ck = await cacheKey(env, fn, args, keyHash, hints);
-    await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: READ_FNS[fn][1] });
-  }
+  await Promise.all(plan.map(async function ([fn, args]) {
+    try {
+      const qs = new URLSearchParams({ api: '1', fn: fn, args: JSON.stringify(args) }).toString();
+      const r = await upstream(env, qs);
+      let o = null; try { o = JSON.parse(r.text); } catch (e) {}
+      if (!o || !o.ok) return;
+      const ck = await cacheKey(env, fn, args, keyHash, hints);
+      await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: READ_FNS[fn][1] });
+    } catch (e) {}
+  }));
 }
 
 /** The gens the caller should carry forward, for the groups touched. */
@@ -76,6 +84,10 @@ export async function onRequestGet(context) {
         await markTrusted(env, keyHash);
         if (!ck) ck = await cacheKey(env, fn, args, keyHash, hints);
         await env.EDGE.put(ck, JSON.stringify({ ok: true, data: o.data, at: Date.now() }), { expirationTtl: spec[1] });
+        // Login seeding (9/22): the first dashInit miss is the moment he has just
+        // signed in. Warm the other screens now, in the background, so his first
+        // tap on Lot / People / Shifts is a HIT instead of a cold 10-20s read.
+        if (fn === 'dashInit') context.waitUntil(prewarm(env, ['board', 'lot', 'appl'], key, keyHash, hints, { init: true }).catch(function () {}));
       } catch (e) {}
     }
     o.edge = { hit: false, upstream_ms: Date.now() - t0 };
@@ -99,7 +111,12 @@ export async function onRequestGet(context) {
         gens = await gensFor(env, [spec[0]], hints);
       } else {
         const wt = await writeThroughLot(env, o.data);
-        if (wt) { gens = wt; }
+        if (wt) {
+          gens = wt;
+          // an auction write bumped the lot gen but only stored the auction screen;
+          // warm the lot list behind it so the Lot tab is a HIT when he goes back
+          if (o.data && o.data.auction) context.waitUntil(prewarm(env, ['lot'], key, keyHash, gens, { auction: true }).catch(function () {}));
+        }
         else {
           const groups = groupsForWrite(fn);
           gens = await bumpGens(env, groups);

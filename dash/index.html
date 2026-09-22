@@ -593,7 +593,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.7';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.7.1';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -920,7 +920,7 @@ function showTab(t){
   $('vSched').style.display    = t==='sched'?'':'none';
   $('vShifts').style.display   = t==='shifts'?'':'none';
   $('vSettings').style.display = t==='settings'?'':'none';
-  if(t==='lot'      && !LOT) loadLot(false);
+  if(t==='lot'      && (!LOT || LOT_STALE)) { LOT_STALE=false; loadLot(!!LOT) }
   if(t==='shifts'   && !SH)  loadShifts();
   if(t==='settings' && !CFG) loadCfg();
   if(t==='people'   && APPL===null) loadAppl(false);
@@ -1830,7 +1830,7 @@ initAuth();
    and Generate saves first, then renders from the saved row.
    The PDF and the record can therefore never disagree.
    ========================================================== */
-var LOT=null, LOTDET=null, lotFilter='work', lotStTarget=null;
+var LOT=null, LOTDET=null, lotFilter='work', lotStTarget=null, LOT_STALE=false;
 
 var LOT_FILTERS=[
   ['work','Being worked'],
@@ -2199,7 +2199,12 @@ var AUC=null, aucV=null, aucOutcome=null;
 
 function loadAuc(quiet){
   api('dashAuction',['',KEYV()],function(d){ AUC=d; renderAucBanner(); if($('shAuc').className.indexOf('on')>=0) renderAuc() },
-      true, '', function(){ AUC=null; renderAucBanner() });
+      true, '',
+      /* 4.7.1: a failed refresh keeps what is already on screen. On 9/22 the
+         refetch after the first outcome timed out and this nulled AUC -- the
+         banner vanished and every vehicle card went dead mid-auction. Only a
+         first load that fails leaves the banner empty. */
+      function(){ if(!AUC) renderAucBanner() });
 }
 
 /* The banner on the Lot tab: only when there is an auction still open.
@@ -2370,7 +2375,7 @@ function sendAucOutcome(id, outcome, fields){
     revert: function(){ if(v&&before){ Object.keys(before).forEach(function(k){ v[k]=before[k] }); aucTally(); renderAuc(); renderAucBanner() } },
     refresh: function(){ loadAuc(true) },
     fn:'dashAuctionOutcome', args:[id,outcome,fields,KEYV()],
-    ok: function(r){ toast(r.note||'Saved.'); if(r.auction){ AUC=r.auction; renderAuc(); renderAucBanner() } loadLot(true) }
+    ok: function(r){ toast(r.note||'Saved.'); if(r.auction){ AUC=r.auction; renderAuc(); renderAucBanner() } else { loadAuc(true) } LOT_STALE=true }
   });
 }
 
