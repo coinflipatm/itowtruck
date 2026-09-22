@@ -377,6 +377,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     </div>
     <div class="chips wrap" id="lChips"></div>
     <div id="lAuc"></div>
+    <div id="lDisp"></div>
     <div id="lList"><div class="empty">Loading&hellip;</div></div>
   </section>
 
@@ -452,6 +453,22 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   <h3 id="aucVName"></h3>
   <div class="shsub" id="aucVSub"></div>
   <div id="aucVBody"></div>
+</div>
+
+<!-- owned inventory: the disposal pipeline -->
+<div class="sheet" id="shDisp">
+  <button class="close" onclick="closeSheets()">&times;</button>
+  <h3>Owned</h3>
+  <div class="shsub" id="dispSub"></div>
+  <div id="dispBody"></div>
+</div>
+
+<!-- one owned vehicle -->
+<div class="sheet" id="shDispV">
+  <button class="close" onclick="closeSheet('shDispV')">&times;</button>
+  <h3 id="dispVName"></h3>
+  <div class="shsub" id="dispVSub"></div>
+  <div id="dispVBody"></div>
 </div>
 
 <!-- applicant note -->
@@ -593,7 +610,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.7.1';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.8';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -844,7 +861,7 @@ var STAGES=['New','Reviewing','Contacted','Interviewed','Rejected'];
 /* ==========================================================
    SHEETS + CONFIRM (no native confirm/prompt anywhere)
    ========================================================== */
-var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus','shAuc','shAucV'];
+var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus','shAuc','shAucV','shDisp','shDispV'];
 function openSheet(id){ $('ov').className='ov on'; $(id).className='sheet on' }
 /* close ONE sheet and leave what was under it open -- the auction screen opens
    a vehicle on top of itself, and saving should drop back to the list, not to
@@ -1844,6 +1861,7 @@ var LOT_FILTERS=[
 function loadLot(quiet){
   api('dashImpounds',[KEYV()],function(d){ LOT=d; renderLotChips(); renderLot() }, quiet, 'Loading lot');
   loadAuc(true);
+  loadDisp(true);
 }
 function lotSetFilter(f){ lotFilter=f; renderLotChips(); renderLot() }
 
@@ -2421,6 +2439,156 @@ function aucClose(){
       if(r.url) window.open(r.url,'_blank');
     }, false, 'Closing out');
   });
+}
+
+/* ==========================================================
+   OWNED -- the disposal pipeline (4.8)
+
+   After an auction with no bidders the car is iTow's and still on
+   the lot. Three taps over its life, from here: the TR-52 came from
+   the state; it went to a yard (or a buyer) for $X; the police were
+   told. The banner is the queue -- how many waiting on paper, how
+   many ready for a scrap run, how many the police have not heard
+   about. The lot turns when that banner reads zero.
+   ========================================================== */
+var DISP=null, dispV=null, dispMode=null;
+
+function loadDisp(quiet){
+  api('dashDisposals',[KEYV()],function(d){ DISP=d; renderDispBanner(); if($('shDisp').className.indexOf('on')>=0) renderDisp() },
+      true, '', function(){ if(!DISP) renderDispBanner() });
+}
+
+function renderDispBanner(){
+  var el=$('lDisp'); if(!el) return;
+  if(!DISP){ el.innerHTML=''; return }
+  var c=DISP.counts, open=c.awaiting_tr52+c.ready+c.notify;
+  if(!open && !c.done){ el.innerHTML=''; return }
+  el.innerHTML='<div class="card" onclick="openDisp()" style="border-color:var(--line2)">'+
+    '<div class="row"><div class="nm">Owned — '+open+' on the lot</div>'+
+      (c.ready?'<span class="pill ok">'+c.ready+' ready to scrap</span>':(c.notify?'<span class="pill warn">'+c.notify+' to notify</span>':'<span class="pill dim">'+c.awaiting_tr52+' waiting on TR-52</span>'))+'</div>'+
+    '<div class="sub2">'+c.awaiting_tr52+' waiting on TR-52 · '+c.ready+' ready · '+c.notify+' to notify'+(c.done?' · '+c.done+' done, '+money(c.done_value):'')+'</div>'+
+  '</div>';
+}
+
+function openDisp(){ if(!DISP){ toast('Nothing loaded yet.',true); return } renderDisp(); openSheet('shDisp') }
+
+function dispCard(v){
+  var line=[v.it||('call '+v.call)]; if(v.plate) line.push(v.plate); if(v.vin) line.push(v.vin.slice(-6));
+  var age=(v.owned_days===''||v.owned_days==null)?'':(v.owned_days+'d ours');
+  var right='';
+  if(v.stage==='awaiting_tr52') right='<span class="pill dim">no TR-52</span>';
+  else if(v.stage==='ready') right='<span class="pill ok">TR-52 '+esc(v.tr52_date)+'</span>';
+  else if(v.stage==='notify') right='<span class="pill warn">'+esc(v.method==='SCRAP'?'scrapped':'sold')+'</span>';
+  return '<div class="card" onclick="openDispV(\''+esc(v.id)+'\')">'+
+    '<div class="row"><div class="nm">'+esc(v.vehicle||'Unknown vehicle')+'</div>'+right+'</div>'+
+    '<div class="sub mono">'+esc(line.join(' · '))+'</div>'+
+    '<div class="sub2">'+esc(v.juris||'no department set')+(age?' · '+age:'')+(v.to_name?' · '+esc(v.to_name)+(v.amount>0?' '+money(v.amount):''):'')+'</div>'+
+  '</div>';
+}
+
+function renderDisp(){
+  if(!DISP) return;
+  var c=DISP.counts, st=DISP.stages, h='';
+  $('dispSub').textContent=c.awaiting_tr52+' waiting on TR-52 · '+c.ready+' ready · '+c.notify+' to notify'+(c.done?' · '+c.done+' done':'');
+
+  h+='<div class="block"><span class="lbl">Ready for a scrap run — TR-52 in hand ('+c.ready+')</span>';
+  h+=st.ready.length?st.ready.map(dispCard).join(''):'<div class="sub2">Nothing ready. A car gets here when its TR-52 comes in.</div>';
+  h+='</div>';
+
+  h+='<div class="block"><span class="lbl">Waiting on the TR-52 from the state ('+c.awaiting_tr52+')</span>';
+  h+=st.awaiting_tr52.length?st.awaiting_tr52.map(dispCard).join(''):'<div class="sub2">Nothing waiting.</div>';
+  h+='</div>';
+
+  h+='<div class="block"><span class="lbl">Gone — police not told yet ('+c.notify+')</span>';
+  h+=st.notify.length?st.notify.map(dispCard).join(''):'<div class="sub2">Nothing to notify.</div>';
+  if(st.notify.length){
+    h+='<button class="btn" onclick="dispNotices()">Print the police notices</button>';
+    h+='<div class="sub2">One page per department covering every vehicle above — method, yard, date, TR-52 — so they cancel the LEIN entries.</div>';
+    (DISP.departments||[]).forEach(function(d){ h+='<div class="sub2">'+esc(d.name)+' ('+d.count+')'+(d.fax?' · fax '+esc(d.fax):'')+(d.email?' · '+esc(d.email):'')+'</div>' });
+  }
+  h+='</div>';
+  $('dispBody').innerHTML=h;
+}
+
+/* ---------- one owned vehicle ---------- */
+function openDispV(id){
+  var all=[].concat(DISP.stages.awaiting_tr52, DISP.stages.ready, DISP.stages.notify);
+  dispV=all.filter(function(x){ return x.id===id })[0];
+  if(!dispV) return;
+  dispMode=null;
+  $('dispVName').textContent=dispV.vehicle||'Unknown vehicle';
+  $('dispVSub').textContent=(dispV.it||('call '+dispV.call))+' · '+(dispV.plate||dispV.vin||'no plate')+' · '+(dispV.juris||'no department');
+  renderDispV();
+  openSheet('shDispV');
+}
+
+function renderDispV(){
+  if(!dispV) return;
+  var v=dispV, h='';
+  if(v.stage==='awaiting_tr52'){
+    h+='<div class="block"><span class="lbl">TR-52</span>';
+    h+='<div class="sub2">Ours since '+esc(v.owned_since||'?')+(v.auction?' ('+esc(v.auction)+')':'')+'. The yard will not take it without the TR-52 from the state.</div>';
+    h+='<label for="d_tr52">Received on</label><div class="krow"><input id="d_tr52" type="date" value="'+esc(todayYmd())+'"><button class="kbtn" onclick="dispTr52()">It came</button></div>';
+    h+='</div>';
+  }
+  if(v.stage==='ready'){
+    h+='<div class="block"><span class="lbl">TR-52 in hand — '+esc(v.tr52_date)+'</span>';
+    h+='<button class="btn sec sm" onclick="dispTr52Clear()">That was a mis-tap — no TR-52 yet</button></div>';
+    h+='<div class="block"><span class="lbl">Where did it go</span>';
+    ['SCRAP','SOLD'].forEach(function(m){
+      h+='<button class="btn'+(dispMode===m?'':' sec')+' sm" onclick="pickDispMode(\''+m+'\')">'+(m==='SCRAP'?'Scrapped — to a yard':'Sold — to a buyer')+'</button>';
+    });
+    if(dispMode){
+      var yards=DISP.yards||[];
+      h+='<label for="d_to">'+(dispMode==='SCRAP'?'Yard':'Buyer')+'</label>'+
+         '<input id="d_to" type="text" list="d_yards" value="" placeholder="'+(dispMode==='SCRAP'?'Padnos':'name')+'" autocomplete="off">'+
+         '<datalist id="d_yards">'+yards.map(function(y){ return '<option value="'+esc(y)+'">' }).join('')+'</datalist>';
+      h+='<div class="two"><div>'+fld('d_amount','What they paid','', '310','text')+'</div>'+
+         '<div><label for="d_payment">How</label><select id="d_payment">'+
+         ['','CASH','CARD','CHECK','ZELLE','OTHER'].map(function(x){ return '<option value="'+x+'">'+(x?x.charAt(0)+x.slice(1).toLowerCase():'—')+'</option>' }).join('')+
+         '</select></div></div>';
+      h+='<label for="d_date">Date</label><input id="d_date" type="date" value="'+esc(todayYmd())+'">';
+      h+=fld('d_notes','Note (optional)','','');
+      h+='<button class="btn" onclick="dispSave()">Save</button>';
+    }
+    h+='</div>';
+  }
+  if(v.stage==='notify'){
+    h+='<div class="block"><span class="lbl">'+(v.method==='SCRAP'?'Scrapped':'Sold')+'</span>';
+    h+='<div class="sub2">'+esc(v.to_name)+(v.amount>0?' — '+money(v.amount):'')+' on '+esc(v.disposed_date)+'. TR-52 '+esc(v.tr52_date)+'.</div>';
+    h+='<div class="sub2">The police notice prints from the Owned screen, one page per department, for everything in this state at once.</div>';
+    h+='</div>';
+  }
+  $('dispVBody').innerHTML=h;
+}
+function todayYmd(){ var d=new Date(), m=d.getMonth()+1, day=d.getDate(); return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day }
+function pickDispMode(m){ dispMode=m; renderDispV() }
+
+function applyDisp(r){ if(r&&r.disposals){ DISP=r.disposals; renderDisp(); renderDispBanner() } else { loadDisp(true) } LOT_STALE=true }
+
+function dispTr52(){
+  if(!dispV) return;
+  var date=$('d_tr52')?$('d_tr52').value:'';
+  closeSheet('shDispV');
+  api('dashDisposalTr52',[dispV.id,date,KEYV()],function(r){ toast(r.note||'Saved.'); applyDisp(r) }, false, 'Saving');
+}
+function dispTr52Clear(){
+  if(!dispV) return;
+  closeSheet('shDispV');
+  api('dashDisposalTr52',[dispV.id,'clear',KEYV()],function(r){ toast(r.note||'Cleared.'); applyDisp(r) }, false, 'Saving');
+}
+function dispSave(){
+  if(!dispV||!dispMode) return;
+  var f={ to_name:($('d_to').value||'').trim(), amount:($('d_amount').value||'').trim(), payment:$('d_payment').value, date:$('d_date').value, notes:($('d_notes').value||'').trim() };
+  if(!f.to_name){ toast(dispMode==='SCRAP'?'Which yard?':'Who bought it?',true); return }
+  closeSheet('shDispV');
+  api('dashDispose',[dispV.id,dispMode,f,KEYV()],function(r){ toast(r.note||'Saved.'); applyDisp(r) }, false, 'Saving');
+}
+function dispNotices(){
+  api('dashDisposalNotices',[KEYV()],function(r){
+    toast(r.note||'Done.'); applyDisp(r);
+    if(r.made&&r.made.length===1) window.open(r.made[0].url,'_blank');
+  }, false, 'Printing notices');
 }
 
 </script>

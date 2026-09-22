@@ -36,7 +36,8 @@ export const READ_FNS = {
   dashConfigList: ['config', 600, false],
   dashImpounds:   ['lot', 300, false],
   dashImpound:    ['lot', 300, false],
-  dashAuction:    ['lot', 300, false]
+  dashAuction:    ['lot', 300, false],
+  dashDisposals:  ['lot', 300, false]
 };
 
 export const GROUPS = ['board', 'appl', 'config', 'lot', 'auth'];
@@ -46,7 +47,7 @@ const KEY_POS = { dashInit: 0 };
 
 /** Which group(s) a write invalidates. Anything unknown bumps everything but auth. */
 export function groupsForWrite(fn) {
-  if (/Impound|Auction/.test(fn)) return ['lot'];         // the board does not show the lot
+  if (/Impound|Auction|Dispos/.test(fn)) return ['lot'];  // the board does not show the lot
   if (/Applicant|Hire/.test(fn)) return ['appl', 'board']; // a hire changes the roster
   if (/Config/.test(fn)) return ['config', 'board'];
   if (/Punch|Shift|Schedule|Exception|Driver|Alias/.test(fn)) return ['board'];
@@ -140,6 +141,7 @@ export function json(obj, status, extraHeaders) {
 export async function writeThroughLot(env, data) {
   if (!data) return false;
   if (data.auction && data.auction.auction && data.auction.vehicles) return writeThroughAuction(env, data.auction);
+  if (data.disposals && data.disposals.stages) return writeThroughView(env, 'dashDisposals', data.disposals);
   if (!data.detail || !data.lot) return false;
   const gens = await bumpGens(env, ['lot']);
   const gen = gens.lot;
@@ -159,9 +161,12 @@ export async function writeThroughLot(env, data) {
  * what killed the screen mid-auction on 9/22. The lot list itself is left to
  * the prewarm; the auction is the thing on screen.
  */
-export async function writeThroughAuction(env, view) {
+export async function writeThroughAuction(env, view) { return writeThroughView(env, 'dashAuction', view, ['']); }
+
+/** Generic: a write that answers with a whole read-screen stores it as that read's next answer under the new lot gen. */
+export async function writeThroughView(env, fn, view, argsSans) {
   const gens = await bumpGens(env, ['lot']);
-  const h = await sha256(JSON.stringify(['']));
-  await env.EDGE.put('c:lot:' + gens.lot + ':dashAuction:' + h.slice(0, 24), JSON.stringify({ ok: true, data: view, at: Date.now() }), { expirationTtl: READ_FNS.dashAuction[1] });
+  const h = await sha256(JSON.stringify(argsSans || []));
+  await env.EDGE.put('c:lot:' + gens.lot + ':' + fn + ':' + h.slice(0, 24), JSON.stringify({ ok: true, data: view, at: Date.now() }), { expirationTtl: READ_FNS[fn][1] });
   return gens;
 }
