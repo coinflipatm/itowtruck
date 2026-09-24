@@ -18,7 +18,7 @@ async function prewarm(env, groups, key, keyHash, hints, skip) {
   skip = skip || {};
   const plan = [];
   if (groups.indexOf('board') >= 0) { plan.push(['dashShifts', [key]]); if (!skip.init) plan.push(['dashInit', [key, 0]]); }
-  if (groups.indexOf('lot') >= 0) { plan.push(['dashImpounds', [key]]); if (!skip.auction) plan.push(['dashAuction', ['', key]]); if (!skip.disposals) plan.push(['dashDisposals', [key]]); }
+  if (groups.indexOf('lot') >= 0) { plan.push(['dashImpounds', [key]]); if (!skip.auction) plan.push(['dashAuction', ['', key]]); if (!skip.disposals) plan.push(['dashDisposals', [key]]); if (!skip.walk) plan.push(['dashWalk', [key]]); }
   if (groups.indexOf('appl') >= 0) plan.push(['dashApplicants', [key]]);
   if (groups.indexOf('config') >= 0) plan.push(['dashConfigList', [key]]);
   await Promise.all(plan.map(async function ([fn, args]) {
@@ -117,6 +117,11 @@ export async function onRequestGet(context) {
           // warm the lot list behind it so the Lot tab is a HIT when he goes back
           if (o.data && o.data.auction) context.waitUntil(prewarm(env, ['lot'], key, keyHash, gens, { auction: true }).catch(function () {}));
           if (o.data && o.data.disposals) context.waitUntil(prewarm(env, ['lot'], key, keyHash, gens, { disposals: true }).catch(function () {}));
+          // a walk tap prewarms nothing: 100+ taps in a row, each with three
+          // background reads, is the storm that took the auction screen down;
+          // the walk view itself was just written through, and the Lot list
+          // can take one miss when he goes back to it
+          if (o.data && o.data.walk) { /* no prewarm */ }
         }
         else {
           const groups = groupsForWrite(fn);

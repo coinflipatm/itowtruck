@@ -37,7 +37,8 @@ export const READ_FNS = {
   dashImpounds:   ['lot', 300, false],
   dashImpound:    ['lot', 300, false],
   dashAuction:    ['lot', 300, false],
-  dashDisposals:  ['lot', 300, false]
+  dashDisposals:  ['lot', 300, false],
+  dashWalk:       ['lot', 300, false]
 };
 
 export const GROUPS = ['board', 'appl', 'config', 'lot', 'auth'];
@@ -47,7 +48,7 @@ const KEY_POS = { dashInit: 0 };
 
 /** Which group(s) a write invalidates. Anything unknown bumps everything but auth. */
 export function groupsForWrite(fn) {
-  if (/Impound|Auction|Dispos/.test(fn)) return ['lot'];  // the board does not show the lot
+  if (/Impound|Auction|Dispos|Walk/.test(fn)) return ['lot'];  // the board does not show the lot
   if (/Applicant|Hire/.test(fn)) return ['appl', 'board']; // a hire changes the roster
   if (/Config/.test(fn)) return ['config', 'board'];
   if (/Punch|Shift|Schedule|Exception|Driver|Alias/.test(fn)) return ['board'];
@@ -142,6 +143,7 @@ export async function writeThroughLot(env, data) {
   if (!data) return false;
   if (data.auction && data.auction.auction && data.auction.vehicles) return writeThroughAuction(env, data.auction);
   if (data.disposals && data.disposals.stages) return writeThroughView(env, 'dashDisposals', data.disposals);
+  if (data.walk && data.walk.rows) return writeThroughView(env, 'dashWalk', data.walk);
   if (!data.detail || !data.lot) return false;
   const gens = await bumpGens(env, ['lot']);
   const gen = gens.lot;

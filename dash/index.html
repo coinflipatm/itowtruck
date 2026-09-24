@@ -378,6 +378,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     <div class="chips wrap" id="lChips"></div>
     <div id="lAuc"></div>
     <div id="lDisp"></div>
+    <div id="lWalk"></div>
     <div id="lList"><div class="empty">Loading&hellip;</div></div>
   </section>
 
@@ -453,6 +454,18 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   <h3 id="aucVName"></h3>
   <div class="shsub" id="aucVSub"></div>
   <div id="aucVBody"></div>
+</div>
+
+<!-- the lot walk -->
+<div class="sheet" id="shWalk" style="max-height:100vh">
+  <button class="close" onclick="closeSheets()">&times;</button>
+  <h3>Walk the lot</h3>
+  <div class="shsub" id="walkSub"></div>
+  <div class="search" style="margin-bottom:8px">
+    <input id="walkSearch" type="text" inputmode="search" placeholder="Plate, last 6, make" oninput="renderWalk()" autocomplete="off">
+  </div>
+  <div class="chips wrap" id="walkChips"></div>
+  <div id="walkBody"></div>
 </div>
 
 <!-- owned inventory: the disposal pipeline -->
@@ -610,7 +623,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.8';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.9';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -861,7 +874,7 @@ var STAGES=['New','Reviewing','Contacted','Interviewed','Rejected'];
 /* ==========================================================
    SHEETS + CONFIRM (no native confirm/prompt anywhere)
    ========================================================== */
-var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus','shAuc','shAucV','shDisp','shDispV'];
+var SHEET_IDS=['shAppl','shNote','shStage','shDriver','shDay','shExc','shAct','shShift','shConfirm','shImp','shImpStatus','shAuc','shAucV','shDisp','shDispV','shWalk'];
 function openSheet(id){ $('ov').className='ov on'; $(id).className='sheet on' }
 /* close ONE sheet and leave what was under it open -- the auction screen opens
    a vehicle on top of itself, and saving should drop back to the list, not to
@@ -1862,6 +1875,7 @@ function loadLot(quiet){
   api('dashImpounds',[KEYV()],function(d){ LOT=d; renderLotChips(); renderLot() }, quiet, 'Loading lot');
   loadAuc(true);
   loadDisp(true);
+  loadWalk(true);
 }
 function lotSetFilter(f){ lotFilter=f; renderLotChips(); renderLot() }
 
@@ -2589,6 +2603,109 @@ function dispNotices(){
     toast(r.note||'Done.'); applyDisp(r);
     if(r.made&&r.made.length===1) window.open(r.made[0].url,'_blank');
   }, false, 'Printing notices');
+}
+
+/* ==========================================================
+   WALK -- one tap per car, standing in front of it (4.9)
+
+   The sheet says 113 in custody and 81 of them nobody has looked at
+   since the Towbook seed. Saturday's walk is what turns that into a
+   true number. Every card is four buttons; the tap lands in the
+   background and the card grays out. In-process and not-here need
+   one more tap to say which. Spot is a row letter and a number.
+   ========================================================== */
+var WALK=null, walkFilter='left', walkOpen={}, walkLastRow='';
+
+function loadWalk(quiet){
+  api('dashWalk',[KEYV()],function(d){ WALK=d; renderWalkBanner(); if($('shWalk').className.indexOf('on')>=0) renderWalk() },
+      true, '', function(){ if(!WALK) renderWalkBanner() });
+}
+function renderWalkBanner(){
+  var el=$('lWalk'); if(!el) return;
+  if(!WALK||!WALK.counts.total){ el.innerHTML=''; return }
+  var c=WALK.counts;
+  el.innerHTML='<div class="card" onclick="openWalk()"><div class="row"><div class="nm">Walk the lot</div>'+
+    '<span class="pill '+(c.left?'warn':'ok')+'">'+(c.left?c.left+' left':'done')+'</span></div>'+
+    '<div class="sub2">'+c.walked+' of '+c.total+' walked</div></div>';
+}
+function openWalk(){ if(!WALK){ toast('Nothing loaded yet.',true); return } renderWalk(); openSheet('shWalk'); window.scrollTo(0,0) }
+function walkSetFilter(f){ walkFilter=f; renderWalk() }
+
+function walkVerdictPill(r){
+  if(!r.walked) return '';
+  var cls={OURS_TR52:'ok',OURS_NO_TR52:'info',IN_PROCESS:'dim',NOT_HERE:'purple'}[r.verdict]||'dim';
+  var lab=(WALK.labels&&WALK.labels[r.verdict])||r.verdict;
+  if(r.verdict==='IN_PROCESS') lab=r.status_label||r.status;
+  return '<span class="pill '+cls+'">'+esc(lab)+(r.spot?' @'+esc(r.spot):'')+'</span>';
+}
+
+function renderWalk(){
+  if(!WALK) return;
+  var c=WALK.counts;
+  $('walkSub').textContent=c.walked+' of '+c.total+' walked · '+c.left+' left';
+  var n={left:c.left, walked:c.walked, all:c.total};
+  $('walkChips').innerHTML=[['left','Left'],['walked','Walked'],['all','All']].map(function(f){
+    return '<button class="chip'+(walkFilter===f[0]?' on':'')+'" onclick="walkSetFilter(\''+f[0]+'\')">'+f[1]+' '+n[f[0]]+'</button>';
+  }).join('');
+  var q=($('walkSearch').value||'').trim().toLowerCase();
+  var rows=WALK.rows.filter(function(r){
+    if(walkFilter==='left'&&r.walked) return false;
+    if(walkFilter==='walked'&&!r.walked) return false;
+    if(!q) return true;
+    return (r.plate+' '+r.vin+' '+r.vehicle+' '+r.it+' '+r.call).toLowerCase().indexOf(q)>=0;
+  });
+  if(!rows.length){ $('walkBody').innerHTML='<div class="empty">'+(walkFilter==='left'?'Every car has been walked.':'Nothing here.')+'</div>'; return }
+  var h='', cap=rows.length>60?60:rows.length;
+  for(var i=0;i<cap;i++) h+=walkCard(rows[i]);
+  if(rows.length>cap) h+='<div class="empty">'+(rows.length-cap)+' more — keep walking, they load as you go.</div>';
+  $('walkBody').innerHTML=h;
+}
+
+function walkCard(r){
+  var line=[r.it||('call '+r.call)]; if(r.plate) line.push(r.plate); if(r.vin) line.push('…'+r.vin.slice(-6));
+  var age=(r.days===''||r.days==null)?'':(r.days+'d');
+  var open=walkOpen[r.id]||'';
+  var h='<div class="card" id="wk_'+esc(r.id)+'" style="'+(r.walked?'opacity:.55':'')+'" onclick="void 0">'+
+    '<div class="row"><div class="nm">'+esc(r.vehicle||'Unknown vehicle')+(r.color?' <span class="sub2">'+esc(r.color)+'</span>':'')+'</div>'+walkVerdictPill(r)+'</div>'+
+    '<div class="sub mono">'+esc(line.join(' · '))+'</div>'+
+    '<div class="sub2">'+esc(r.juris||'no department')+(age?' · towed '+age+' ago':'')+' · '+esc(r.status_label||r.status)+(r.owed?' · owed '+money(r.owed):'')+'</div>'+
+    (r.hint_tr52&&!r.walked?'<div class="sub2"><span class="pill ok">notes say TR-52 in hand</span></div>':'')+
+    (r.prior_note&&!r.hint_tr52?'<div class="sub2">'+esc(r.prior_note)+'</div>':'');
+  h+='<div class="krow" style="margin:8px 0 6px"><input id="ws_'+esc(r.id)+'" type="text" value="'+esc(r.spot||'')+'" placeholder="'+esc(walkLastRow?walkLastRow+'…':'spot B7')+'" autocomplete="off" autocapitalize="characters" style="max-width:110px"></div>';
+  h+='<div class="two"><div><button class="btn'+(r.hint_tr52?'':' sec')+' sm" onclick="walkTap(\''+esc(r.id)+'\',\'OURS_TR52\')">Ours · TR-52</button></div>'+
+     '<div><button class="btn sec sm" onclick="walkTap(\''+esc(r.id)+'\',\'OURS_NO_TR52\')">Ours · no TR-52</button></div></div>';
+  h+='<div class="two"><div><button class="btn sec sm" onclick="walkExpand(\''+esc(r.id)+'\',\'IN_PROCESS\')">In process</button></div>'+
+     '<div><button class="btn sec sm" onclick="walkExpand(\''+esc(r.id)+'\',\'NOT_HERE\')">Not here</button></div></div>';
+  if(open==='IN_PROCESS'){
+    h+='<div class="chips wrap" style="margin-top:6px">'+(WALK.stages||[]).map(function(st){
+      return '<button class="chip'+(r.status===st?' on':'')+'" onclick="walkTap(\''+esc(r.id)+'\',\'IN_PROCESS\',{stage:\''+st+'\'})">'+esc((WALK.stage_labels&&WALK.stage_labels[st])||st)+'</button>';
+    }).join('')+'</div>';
+  } else if(open==='NOT_HERE'){
+    h+='<div class="chips wrap" style="margin-top:6px">'+(WALK.gone||[]).map(function(g){
+      return '<button class="chip" onclick="walkTap(\''+esc(r.id)+'\',\'NOT_HERE\',{gone:\''+g+'\'})">'+esc((WALK.gone_labels&&WALK.gone_labels[g])||g)+'</button>';
+    }).join('')+'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function walkExpand(id, which){ walkOpen[id]=(walkOpen[id]===which)?'':which; renderWalk() }
+
+/* Optimistic: the card grays and the counter moves on the tap. A refusal
+   (bad spot, missing stage) puts it back and says why. */
+function walkTap(id, verdict, extra){
+  var r=(WALK&&WALK.rows||[]).filter(function(x){ return x.id===id })[0]; if(!r) return;
+  var spotEl=$('ws_'+id); var spot=spotEl?(spotEl.value||'').trim().toUpperCase():'';
+  var f=Object.assign({ spot:spot }, extra||{});
+  if(spot){ var m=spot.match(/^([A-Z]{1,2})/); if(m) walkLastRow=m[1] }
+  var before=JSON.parse(JSON.stringify(r)), cBefore=JSON.parse(JSON.stringify(WALK.counts));
+  walkOpen[id]='';
+  optimistic({
+    apply: function(){ if(!r.walked){ WALK.counts.walked++; WALK.counts.left-- } r.walked=true; r.verdict=verdict; r.spot=spot; if(f.stage) r.status=f.stage; renderWalk(); renderWalkBanner() },
+    revert: function(){ Object.keys(before).forEach(function(k){ r[k]=before[k] }); WALK.counts=cBefore; renderWalk(); renderWalkBanner() },
+    refresh: function(){ loadWalk(true) },
+    fn:'dashWalkMark', args:[id,verdict,f,KEYV()],
+    ok: function(res){ if(res.walk){ WALK=res.walk; renderWalk(); renderWalkBanner() } LOT_STALE=true; if(DISP) loadDisp(true) }
+  });
 }
 
 </script>
