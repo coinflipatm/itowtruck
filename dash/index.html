@@ -623,7 +623,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.9';      // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.10';     // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -2028,6 +2028,12 @@ function impBody(d){
   h+='<div class="two"><div>'+fld('f_Year','Year',f.Year,'2005')+'</div>'+
      '<div>'+fld('f_Make','Make',f.Make,'Chrysler')+'</div></div>';
   h+=fld('f_Model','Model',f.Model,'Pacifica');
+  /* 4.10: colour and the State's body-style code. The TOP and the TR-52 both
+     carry them; before this the only way to get a colour on the form was to
+     type it into Model. Codes are the ones the SOS prints on the TR-52L
+     (SUVs, crossovers and minivans are SW to the State, not 4D). */
+  h+='<div class="two"><div>'+fld('f_Color','Color',f.Color,'Red')+'</div>'+
+     '<div><label for="f_Style">Type (SOS code)</label>'+styleSel(f.Style)+'</div></div>';
   h+=fld('f_VIN','VIN',f.VIN,'17 characters, no I/O/Q');
   h+='<div class="two"><div>'+fld('f_Plate','Plate',f.Plate,'33ACZ7')+'</div>'+
      '<div>'+fld('f_Plate_State','State',f.Plate_State,'MI')+'</div></div>';
@@ -2121,8 +2127,24 @@ function impNow(){
 }
 
 var IMP_FIELDS=['IT_Number','Jurisdiction','Police_Notified_At','Complaint_No','Pretow_Officer','Year','Make','Model',
-                'VIN','Plate','Plate_State','Tow_Date','Tow_Time','Tow_From','Tow_From_City','Tow_From_Zip',
+                'Color','Style','VIN','Plate','Plate_State','Tow_Date','Tow_Time','Tow_From','Tow_From_City','Tow_From_Zip',
                 'Requestor','Lot','Notes'];
+
+/* The body-style codes the Michigan SOS prints on a TR-52L, as seen on iTow's
+   own forms 9/26: 4D sedan, 2D coupe, SW for every SUV / crossover / minivan /
+   wagon, PU pickup, VN van, CV convertible, MC motorcycle, TL trailer, MH motor
+   home, BU bus. The decoder fills one in; this lets you correct it to what the
+   State's paper says. Blank stays blank. */
+var SOS_STYLES=[['','--'],['4D','4D sedan / 4-door'],['2D','2D coupe / 2-door'],['SW','SW wagon, SUV, crossover, minivan'],['PU','PU pickup'],
+                ['VN','VN van'],['CV','CV convertible'],['MC','MC motorcycle'],['TL','TL trailer'],['MH','MH motor home'],['BU','BU bus']];
+function styleSel(cur){
+  cur=String(cur||'').toUpperCase();
+  var known=SOS_STYLES.some(function(o){ return o[0]===cur });
+  var h='<select id="f_Style">';
+  SOS_STYLES.forEach(function(o){ h+='<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+esc(o[1])+'</option>' });
+  if(cur&&!known) h+='<option value="'+esc(cur)+'" selected>'+esc(cur)+' (as recorded)</option>';
+  return h+'</select>';
+}
 
 function impCollect(){
   var o={};
@@ -2607,6 +2629,7 @@ function dispNotices(){
 
 /* ==========================================================
    WALK -- one tap per car, standing in front of it (4.9)
+   4.10 -- Color and SOS body-style code on the Lot form (they already print on the TOP)
 
    The sheet says 113 in custody and 81 of them nobody has looked at
    since the Towbook seed. Saturday's walk is what turns that into a
