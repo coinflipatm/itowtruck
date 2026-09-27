@@ -126,11 +126,23 @@ export async function onRequestGet(context) {
         else {
           const groups = groupsForWrite(fn);
           gens = await bumpGens(env, groups);
+          // 20 v3.19 (9/27): a board write answers with the fresh board as
+          // data.init. Store it as this key's next dashInit under the new board
+          // gen, so a reload or a second device on this key is a HIT and the
+          // prewarm does not rebuild it a second time.
+          let initStored = false;
+          if (o.data && o.data.init && o.data.init.boot && groups.indexOf('board') >= 0) {
+            try {
+              const ick = await cacheKey(env, 'dashInit', [key, 0], keyHash, gens);
+              await env.EDGE.put(ick, JSON.stringify({ ok: true, data: o.data.init, at: Date.now() }), { expirationTtl: READ_FNS.dashInit[1] });
+              initStored = true;
+            } catch (e) {}
+          }
           // Prewarm: the screens this write just invalidated are refetched for
           // this caller in the background, so his next tap is a HIT instead of
           // a 4-7s rebuild. Runs after the response is sent (waitUntil). The
           // new gens are passed as hints so the POP's cached old gen is ignored.
-          context.waitUntil(prewarm(env, groups, key, keyHash, gens).catch(function () {}));
+          context.waitUntil(prewarm(env, groups, key, keyHash, gens, { init: initStored }).catch(function () {}));
         }
       }
     } catch (e) {}

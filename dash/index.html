@@ -623,7 +623,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.10';     // expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.11';     // 4.11 paints the board from a write's data.init (server 20 v3.19) instead of a forced dashInit; expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -758,7 +758,7 @@ function perfNote(fn, wall, data, err, edge){
   var rec = { at:new Date().toTimeString().slice(0,8), fn:fn, wall:Math.round(wall),
               srv: srv ? Math.round((srv.verify||0)+(srv.sheets||0)) : null,
               cached: srv ? !!srv.cached : null, err: err?1:0,
-              edge: edge ? (edge.hit ? 'HIT' : (edge.pass ? 'pass' : 'miss')) : (EDGE_ON ? 'direct' : '') };
+              edge: edge ? (edge.pushed ? 'pushed' : edge.hit ? 'HIT' : (edge.pass ? 'pass' : 'miss')) : (EDGE_ON ? 'direct' : '') };
   PERF_LOG.push(rec); if(PERF_LOG.length>40) PERF_LOG.shift();
   try{ console.log('[perf]', rec.fn, rec.wall+'ms', rec.srv!=null?('srv '+rec.srv+'ms'+(rec.cached?' cached':'')):'', err?'ERR':''); }catch(e){}
   if(!PERF) return;
@@ -802,6 +802,7 @@ function api(fn,args,ok,quiet,msg,fail){
     .then(function(j){
       pnote(j&&j.data, !j.ok, j&&j.edge);
       if(!j.ok) throw new Error(j.error||'Request failed');
+      if(!isRead && j.data && j.data.init && j.data.init.boot && j.data.init.today) PUSHED_INIT={d:j.data.init, at:Date.now()};
       settle(); ok(j.data);
     })
     .catch(function(e){
@@ -865,6 +866,12 @@ function authFail(){
    ========================================================== */
 var B=null, TD=null, HEALTH=null, SH=null, CFG=null, APPL=null, APDET=null;
 var lastInitAt=0, wkOff=0, daySel=null, viewOnly=false;
+/* 4.11: a board write (server 20 v3.19) answers with the fresh board as
+   data.init. api() parks it here; the forced loadInit every save path already
+   makes consumes it instead of calling Google again -- that forced call was
+   the 2-9s dashInit miss after every save in the perf logs. Parked for 8s:
+   anything older is not trusted to be the result of THIS save. */
+var PUSHED_INIT=null;
 var selDriver=null, selShiftDriver=null, editDriver=null, editDay=null, editShift=null;
 var peopleView='crew', aFilter='ALL', stageTarget=null, noteTarget=null;
 var DAYS=['FRI','SAT','SUN','MON','TUE','WED','THU'];
@@ -910,14 +917,21 @@ function confirmSheet(o,cb){
 /* ==========================================================
    BOOT
    ========================================================== */
+function applyInit(d){
+  B=d.boot; TD=d.today; HEALTH=d.health; lastInitAt=Date.now();
+  if(!FORCE_LOGIN){ try{ sessionStorage.setItem('towos_init', JSON.stringify({t:lastInitAt,d:d})) }catch(e){} }
+  hideLogin(); paint();
+  if(!daySel) renderBoard(TD,false);
+  renderFoot(false);
+}
 function loadInit(force,quiet){
-  api('dashInit',[KEYV(), force?1:0], function(d){
-    B=d.boot; TD=d.today; HEALTH=d.health; lastInitAt=Date.now();
-    if(!FORCE_LOGIN){ try{ sessionStorage.setItem('towos_init', JSON.stringify({t:lastInitAt,d:d})) }catch(e){} }
-    hideLogin(); paint();
-    if(!daySel) renderBoard(TD,false);
-    renderFoot(false);
-  }, quiet, 'Loading');
+  if(force && PUSHED_INIT && Date.now()-PUSHED_INIT.at<8000){
+    var pd=PUSHED_INIT.d; PUSHED_INIT=null;
+    perfNote('dashInit', 0, pd, false, {pushed:true});
+    applyInit(pd); return;
+  }
+  PUSHED_INIT=null;
+  api('dashInit',[KEYV(), force?1:0], applyInit, quiet, 'Loading');
 }
 function paint(){
   $('me').textContent = B.me || '';
