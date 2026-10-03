@@ -130,12 +130,40 @@ export async function markTrusted(env, keyHash) {
  */
 export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'dashApplicants', 'dashApplicant', 'dashImpounds', 'dashImpound', 'dashAuction', 'dashDisposals', 'dashWalk'];
 
-export function d1Eligible(env, qs) {
+/**
+ * Write hold: the mirror behind the Worker is ~1-2 minutes behind the Sheet,
+ * so for D1_HOLD_S after a dash write every read in the groups that write
+ * touched goes to Apps Script (the authority) instead of D1. Without this the
+ * prewarm after a write would re-cache a D1 answer that predates the write
+ * and the operator would watch his own correction "not take" for a minute.
+ * SMS punches do not pass through the edge, so they are not covered: a
+ * punch shows on the D1-served board up to one mirror cycle late.
+ */
+export const D1_HOLD_S = 180;
+
+export async function holdD1(env, groups) {
+  if (!env || !env.EDGE) return;
+  await Promise.all((groups || []).map(function (g) {
+    return env.EDGE.put('d1hold:' + g, String(Date.now()), { expirationTtl: D1_HOLD_S }).catch(function () {});
+  }));
+}
+
+export async function d1Eligible(env, qs) {
   if (!env || !env.TOWOS_D1_URL) return false;
-  const fn = new URLSearchParams(qs).get('fn') || '';
+  const p = new URLSearchParams(qs);
+  const fn = p.get('fn') || '';
   if (D1_FNS.indexOf(fn) < 0) return false;
   const skip = String(env.TOWOS_D1_SKIP || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-  return skip.indexOf(fn) < 0;
+  if (skip.indexOf(fn) >= 0) return false;
+  // A forced dashInit (pull-to-refresh) is the operator asking for the authority.
+  if (fn === 'dashInit') {
+    try { const a = JSON.parse(p.get('args') || '[]'); if (a.length > 1 && (a[1] === true || String(a[1]) === '1')) return false; } catch (e) {}
+  }
+  const spec = READ_FNS[fn];
+  if (spec && env.EDGE) {
+    try { if (await env.EDGE.get('d1hold:' + spec[0])) return false; } catch (e) { /* KV trouble: use D1 as configured */ }
+  }
+  return true;
 }
 
 async function fetchText(url, ms) {
@@ -167,7 +195,7 @@ export async function upstreamD1(env, qs) {
 
 /** Apps Script, with the same query string the dash has always sent. 25s cap. D1 first when eligible. */
 export async function upstream(env, qs) {
-  if (d1Eligible(env, qs)) {
+  if (await d1Eligible(env, qs)) {
     const d1 = await upstreamD1(env, qs);
     if (d1) return d1;
   }

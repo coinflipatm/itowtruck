@@ -5,7 +5,7 @@
  * The envelope gains one field, edge: { hit, age_s | upstream_ms }, which the
  * dash's ?perf=1 pill shows. Nothing else about the shape changes.
  */
-import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite, getGen } from '../_edge.js';
+import { READ_FNS, sha256, keyOf, cacheKey, isTrusted, markTrusted, upstream, json, writeThroughLot, bumpGens, groupsForWrite, getGen, holdD1 } from '../_edge.js';
 
 /**
  * Refetch the reads a write just invalidated, for the writer's key, and cache
@@ -113,6 +113,7 @@ export async function onRequestGet(context) {
         const wt = await writeThroughLot(env, o.data);
         if (wt) {
           gens = wt;
+          await holdD1(env, ['lot']);   // reads of the lot stay on Apps Script until the mirror catches up
           // an auction write bumped the lot gen but only stored the auction screen;
           // warm the lot list behind it so the Lot tab is a HIT when he goes back
           if (o.data && o.data.auction) context.waitUntil(prewarm(env, ['lot'], key, keyHash, gens, { auction: true }).catch(function () {}));
@@ -126,6 +127,7 @@ export async function onRequestGet(context) {
         else {
           const groups = groupsForWrite(fn);
           gens = await bumpGens(env, groups);
+          await holdD1(env, groups);    // same: the prewarm below must not re-cache a pre-write D1 answer
           // 20 v3.19 (9/27): a board write answers with the fresh board as
           // data.init. Store it as this key's next dashInit under the new board
           // gen, so a reload or a second device on this key is a HIT and the

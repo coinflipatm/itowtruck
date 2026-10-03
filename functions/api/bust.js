@@ -5,7 +5,7 @@
  * from _dashBustBoot_ (Phase 2b) so an SMS-side punch does not wait out the
  * board TTL. GET /api/bust with the bearer reports the current gens.
  */
-import { bumpGens, getGen, GROUPS, json } from '../_edge.js';
+import { bumpGens, getGen, GROUPS, json, holdD1 } from '../_edge.js';
 
 function authed(request, env) {
   const h = request.headers.get('authorization') || '';
@@ -19,6 +19,9 @@ export async function onRequestPost(context) {
   try { body = await request.json(); } catch (e) {}
   const groups = Array.isArray(body.groups) && body.groups.length ? body.groups : ['board'];
   const bumped = await bumpGens(env, groups);
+  // An SMS punch just changed the Sheet; the D1 mirror will not have it for a
+  // minute or two, so the next reads of these groups come from Apps Script.
+  await holdD1(env, groups);
   return json({ ok: true, bumped });
 }
 
