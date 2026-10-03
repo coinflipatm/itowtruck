@@ -116,17 +116,90 @@ export async function markTrusted(env, keyHash) {
   await env.EDGE.put('auth:' + gen + ':' + keyHash, '1', { expirationTtl: 3600 });
 }
 
-/** Apps Script, with the same query string the dash has always sent. 25s cap. */
-export async function upstream(env, qs) {
+/**
+ * TowOS v2 (2026-10-03, Phase 1): the READ functions can be answered by the
+ * D1-backed Worker instead of Apps Script. Opt-in per environment: set the
+ * Pages variable TOWOS_D1_URL (the Worker's base URL) and reads in D1_FNS go
+ * there first. Apps Script stays the authority: the Worker's answer is used
+ * ONLY when it is HTTP 200, parses as JSON and says ok:true. Anything else
+ * (network error, timeout, a stale mirror, an auth refusal, an unported edge
+ * case) falls through to Apps Script exactly as before, so turning this on
+ * can make a read faster but never wrong or unavailable. TOWOS_D1_SKIP is a
+ * comma list of fns to keep on Apps Script while the parity harness is still
+ * out on them. Remove TOWOS_D1_URL and the edge is byte-for-byte the old one.
+ */
+export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'dashApplicants', 'dashApplicant', 'dashImpounds', 'dashImpound', 'dashAuction', 'dashDisposals', 'dashWalk'];
+
+/**
+ * Write hold: the mirror behind the Worker is ~1-2 minutes behind the Sheet,
+ * so for D1_HOLD_S after a dash write every read in the groups that write
+ * touched goes to Apps Script (the authority) instead of D1. Without this the
+ * prewarm after a write would re-cache a D1 answer that predates the write
+ * and the operator would watch his own correction "not take" for a minute.
+ * SMS punches do not pass through the edge, so they are not covered: a
+ * punch shows on the D1-served board up to one mirror cycle late.
+ */
+export const D1_HOLD_S = 180;
+
+export async function holdD1(env, groups) {
+  if (!env || !env.EDGE) return;
+  await Promise.all((groups || []).map(function (g) {
+    return env.EDGE.put('d1hold:' + g, String(Date.now()), { expirationTtl: D1_HOLD_S }).catch(function () {});
+  }));
+}
+
+export async function d1Eligible(env, qs) {
+  if (!env || !env.TOWOS_D1_URL) return false;
+  const p = new URLSearchParams(qs);
+  const fn = p.get('fn') || '';
+  if (D1_FNS.indexOf(fn) < 0) return false;
+  const skip = String(env.TOWOS_D1_SKIP || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (skip.indexOf(fn) >= 0) return false;
+  // A forced dashInit (pull-to-refresh) is the operator asking for the authority.
+  if (fn === 'dashInit') {
+    try { const a = JSON.parse(p.get('args') || '[]'); if (a.length > 1 && (a[1] === true || String(a[1]) === '1')) return false; } catch (e) {}
+  }
+  const spec = READ_FNS[fn];
+  if (spec && env.EDGE) {
+    try { if (await env.EDGE.get('d1hold:' + spec[0])) return false; } catch (e) { /* KV trouble: use D1 as configured */ }
+  }
+  return true;
+}
+
+async function fetchText(url, ms) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 25000);
+  const timer = setTimeout(() => ctl.abort(), ms);
   try {
-    const r = await fetch(env.TOWOS_API_URL + '?' + qs, { redirect: 'follow', signal: ctl.signal, headers: { 'accept': 'application/json,text/plain' } });
+    const r = await fetch(url, { redirect: 'follow', signal: ctl.signal, headers: { 'accept': 'application/json,text/plain' } });
     const text = await r.text();
     return { status: r.status, text };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The D1 Worker's answer if it is a clean ok:true, else null (caller falls back). */
+export async function upstreamD1(env, qs) {
+  try {
+    const r = await fetchText(String(env.TOWOS_D1_URL).replace(/\/$/, '') + '/api?' + qs, 8000);
+    if (r.status !== 200) return null;
+    let o = null;
+    try { o = JSON.parse(r.text); } catch (e) { return null; }
+    if (!o || typeof o !== 'object' || o.ok !== true) return null;
+    o.src = 'd1';
+    return { status: 200, text: JSON.stringify(o) };
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Apps Script, with the same query string the dash has always sent. 25s cap. D1 first when eligible. */
+export async function upstream(env, qs) {
+  if (await d1Eligible(env, qs)) {
+    const d1 = await upstreamD1(env, qs);
+    if (d1) return d1;
+  }
+  return fetchText(env.TOWOS_API_URL + '?' + qs, 25000);
 }
 
 export function json(obj, status, extraHeaders) {
