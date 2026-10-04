@@ -127,7 +127,9 @@ export async function onRequestGet(context) {
         else {
           const groups = groupsForWrite(fn);
           gens = await bumpGens(env, groups);
-          await holdD1(env, groups);    // same: the prewarm below must not re-cache a pre-write D1 answer
+          // A write the Worker served is already in D1 (ahead of the Sheet) — no hold, so the prewarm
+          // below re-reads from D1 and shows the change at once. Apps Script writes hold as before.
+          if (o.src !== 'd1') await holdD1(env, groups);
           // 20 v3.19 (9/27): a board write answers with the fresh board as
           // data.init. Store it as this key's next dashInit under the new board
           // gen, so a reload or a second device on this key is a HIT and the

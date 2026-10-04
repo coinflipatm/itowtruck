@@ -131,6 +131,38 @@ export async function markTrusted(env, keyHash) {
 export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'dashApplicants', 'dashApplicant', 'dashImpounds', 'dashImpound', 'dashAuction', 'dashDisposals', 'dashWalk'];
 
 /**
+ * Phase 2 (2026-10-03): WRITES the Worker accepts. It validates against the mirror, patches D1 so
+ * every read shows the change at once, answers in ~100 ms, and relays the identical call to Apps
+ * Script in the background (the Sheet stays the record). Same rule as reads: the Worker's answer
+ * is used only when it is 200 + JSON + ok:true, otherwise the write goes to Apps Script as before.
+ * TOWOS_D1_WRITE_SKIP = comma list of fns to keep on Apps Script.
+ */
+export const D1_WRITE_FNS = ['dashClearScheduleDay', 'dashSetScheduleDay', 'dashSaveDriver'];
+
+/** For D1_RELAY_HOLD_S after the edge hands a write to the Worker, a /api/bust for that group is the
+ *  relay landing on Apps Script, not a punch: bump gens, but do not hold reads off D1 (D1 is ahead). */
+export const D1_RELAY_HOLD_S = 90;
+
+export async function markRelay(env, groups) {
+  if (!env || !env.EDGE) return;
+  await Promise.all((groups || []).map(function (g) {
+    return env.EDGE.put('d1relay:' + g, String(Date.now()), { expirationTtl: D1_RELAY_HOLD_S }).catch(function () {});
+  }));
+}
+
+export async function relayMarked(env, group) {
+  if (!env || !env.EDGE) return false;
+  try { return !!(await env.EDGE.get('d1relay:' + group)); } catch (e) { return false; }
+}
+
+export function d1WriteEligible(env, fn) {
+  if (!env || !env.TOWOS_D1_URL) return false;
+  if (D1_WRITE_FNS.indexOf(fn) < 0) return false;
+  const skip = String(env.TOWOS_D1_WRITE_SKIP || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  return skip.indexOf(fn) < 0;
+}
+
+/**
  * Write hold: the mirror behind the Worker is ~1-2 minutes behind the Sheet,
  * so for D1_HOLD_S after a dash write every read in the groups that write
  * touched goes to Apps Script (the authority) instead of D1. Without this the
@@ -193,11 +225,15 @@ export async function upstreamD1(env, qs) {
   }
 }
 
-/** Apps Script, with the same query string the dash has always sent. 25s cap. D1 first when eligible. */
+/** Apps Script, with the same query string the dash has always sent. 25s cap. D1 first when eligible (reads and the Phase 2 writes). */
 export async function upstream(env, qs) {
+  const fn = new URLSearchParams(qs).get('fn') || '';
   if (await d1Eligible(env, qs)) {
     const d1 = await upstreamD1(env, qs);
     if (d1) return d1;
+  } else if (d1WriteEligible(env, fn)) {
+    const d1 = await upstreamD1(env, qs);
+    if (d1) { await markRelay(env, groupsForWrite(fn)); return d1; }
   }
   return fetchText(env.TOWOS_API_URL + '?' + qs, 25000);
 }
