@@ -405,6 +405,19 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 
   <!-- ========== SETTINGS ========== -->
   <section id="vSettings" style="display:none">
+    <!-- v4.6: Towbook import — our own way (API access denied). Reports → Dispatching Analysis → Excel,
+         pick the file here; it is parsed in this browser and sent to the Worker as rows. -->
+    <div class="sec"><span class="lbl">Towbook · Dispatching Analysis import</span></div>
+    <div class="knob" id="tbCard">
+      <div class="kd">Import a Dispatching Analysis export</div>
+      <div class="kk" id="tbCov">Checking what we have…</div>
+      <div class="help on" id="tbHelp">In Towbook: Reports → Dispatching Analysis → set the date range (last week is enough; overlaps never double-count) → Excel. Then pick that file here. Nothing is sent until the file is read and parsed on this phone.</div>
+      <div class="krow">
+        <input type="file" id="tbFile" accept=".xlsx,.xls,.csv" style="flex:1;font-size:14px;color:var(--ink)">
+        <button class="kbtn" id="tbGo" onclick="tbImport()">Import</button>
+      </div>
+      <div class="kk" id="tbOut" style="margin-top:10px;white-space:pre-wrap"></div>
+    </div>
     <div class="sec"><span class="lbl">System settings · changes are live immediately</span></div>
     <div id="cfgList"></div>
   </section>
@@ -967,6 +980,7 @@ function showTab(t){
   if(t==='lot'      && (!LOT || LOT_STALE)) { LOT_STALE=false; loadLot(!!LOT) }
   if(t==='shifts'   && !SH)  loadShifts();
   if(t==='settings' && !CFG) loadCfg();
+  if(t==='settings') tbCoverage();
   if(t==='people'   && APPL===null) loadAppl(false);
   window.scrollTo(0,0);
 }
@@ -1772,6 +1786,76 @@ function deleteShift(){
 /* ==========================================================
    SETTINGS
    ========================================================== */
+/* ---- Towbook import (v4.6) --------------------------------------------
+   Towbook refused API access, so the export is the API. The Dispatching
+   Analysis xlsx is parsed here with SheetJS (loaded on first use), the
+   header row is found by its 'Call Number' column, every row becomes
+   {header: value} with dates written as the Detroit wall-clock the export
+   prints, and the rows go to the Worker in batches of 500. The Worker
+   upserts by call number, so an overlapping range is safe to re-import. */
+var TB_API='https://towos-api.finorb5.workers.dev';
+var TB_XLSX='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+function tbLoadSheetJS(){
+  return new Promise(function(res,rej){
+    if(window.XLSX) return res();
+    var sc=document.createElement('script'); sc.src=TB_XLSX; sc.onload=function(){res()}; sc.onerror=function(){rej(new Error('Could not load the spreadsheet parser'))};
+    document.head.appendChild(sc);
+  });
+}
+function tbPad(n){ return (n<10?'0':'')+n }
+function tbCell(v){
+  if(v instanceof Date){ if(isNaN(v)) return ''; return v.getFullYear()+'-'+tbPad(v.getMonth()+1)+'-'+tbPad(v.getDate())+' '+tbPad(v.getHours())+':'+tbPad(v.getMinutes())+':'+tbPad(v.getSeconds()) }
+  return v==null?'':v;
+}
+function tbCoverage(){
+  var el=$('tbCov'); if(!el) return;
+  fetch(TB_API+'/towbook/summary?days=7&k='+encodeURIComponent(KEYV())).then(function(r){return r.json()}).then(function(j){
+    if(!j.ok||!j.coverage||!j.coverage.calls){ el.textContent='Nothing imported yet.'; return }
+    var c=j.coverage; el.textContent=c.calls+' calls on file · received '+c.first_received+' → '+c.last_received+' · last import '+c.last_import;
+  }).catch(function(){ el.textContent='Could not reach the Worker.' });
+}
+function tbImport(){
+  var f=$('tbFile').files && $('tbFile').files[0];
+  var out=$('tbOut'); var btn=$('tbGo');
+  if(!f){ toast('Pick the export file first.',true); return }
+  btn.disabled=true; out.textContent='Reading '+f.name+'…';
+  tbLoadSheetJS().then(function(){ return f.arrayBuffer() }).then(function(buf){
+    var wb=XLSX.read(buf,{type:'array',cellDates:true});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    var hi=-1; for(var i=0;i<Math.min(aoa.length,20);i++){ if(aoa[i].some(function(c){ return String(c).trim().toLowerCase()==='call number' })){ hi=i; break } }
+    if(hi<0) throw new Error('This does not look like a Dispatching Analysis export (no "Call Number" column).');
+    var hdr=aoa[hi].map(function(h){ return String(h==null?'':h).trim() });
+    var rows=[];
+    for(var r=hi+1;r<aoa.length;r++){
+      var a=aoa[r]; if(!a||!a.length) continue;
+      var o={}, any=false;
+      for(var c=0;c<hdr.length;c++){ if(!hdr[c]) continue; var v=tbCell(a[c]); if(v!=='') any=true; o[hdr[c]]=v }
+      if(any) rows.push(o);
+    }
+    if(!rows.length) throw new Error('No rows under the header.');
+    out.textContent='Parsed '+rows.length+' rows. Sending…';
+    var tot={rows:0,inserted:0,updated:0,skipped:0}, range=null, i=0;
+    function next(){
+      if(i>=rows.length){
+        out.textContent='Done: '+tot.inserted+' new, '+tot.updated+' updated, '+tot.skipped+' skipped'+(range?' · received '+range[0]+' → '+range[1]:'')+'.';
+        toast('Towbook import done: '+tot.inserted+' new, '+tot.updated+' updated.');
+        btn.disabled=false; tbCoverage(); return;
+      }
+      var batch=rows.slice(i,i+500); i+=500;
+      fetch(TB_API+'/towbook/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({k:KEYV(),source_file:f.name,rows:batch})})
+        .then(function(r){ return r.json() }).then(function(j){
+          if(!j.ok) throw new Error(j.error||'Import failed');
+          tot.rows+=j.rows; tot.inserted+=j.inserted; tot.updated+=j.updated; tot.skipped+=j.skipped;
+          if(j.range){ range = range ? [range[0], j.range[1]] : j.range }
+          out.textContent='Sent '+Math.min(i,rows.length)+' of '+rows.length+'…';
+          next();
+        }).catch(function(e){ out.textContent='Stopped after '+tot.rows+' rows: '+e.message; toast(e.message,true); btn.disabled=false });
+    }
+    next();
+  }).catch(function(e){ out.textContent=e.message||String(e); toast(e.message||String(e),true); btn.disabled=false });
+}
+
 function loadCfg(){ api('dashConfigList',[KEYV()],function(c){ CFG=c; renderCfg() },false,'Loading settings') }
 function renderCfg(){
   var v=$('cfgList'); v.innerHTML='';
