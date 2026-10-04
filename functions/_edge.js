@@ -137,7 +137,7 @@ export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'd
  * is used only when it is 200 + JSON + ok:true, otherwise the write goes to Apps Script as before.
  * TOWOS_D1_WRITE_SKIP = comma list of fns to keep on Apps Script.
  */
-export const D1_WRITE_FNS = ['dashClearScheduleDay', 'dashSetScheduleDay', 'dashSaveDriver'];
+export const D1_WRITE_FNS = ['dashClearScheduleDay', 'dashSetScheduleDay', 'dashSetScheduleWeek', 'dashSaveDriver', 'dashPunch'];
 
 /** For D1_RELAY_HOLD_S after the edge hands a write to the Worker, a /api/bust for that group is the
  *  relay landing on Apps Script, not a punch: bump gens, but do not hold reads off D1 (D1 is ahead). */
