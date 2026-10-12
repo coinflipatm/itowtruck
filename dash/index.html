@@ -325,6 +325,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     <div class="tab"    id="tabPeople" onclick="showTab('people')">People<span class="dot" id="applDot" style="display:none">0</span></div>
     <div class="tab"    id="tabSched"  onclick="showTab('sched')">Schedule</div>
     <div class="tab"    id="tabShifts" onclick="showTab('shifts')">Shifts</div>
+    <div class="tab"    id="tabUnits"  onclick="showTab('units')">Units</div>
     <div class="tab"    id="tabCfg"    onclick="showTab('settings')" style="display:none">Settings</div>
   </div>
 </header>
@@ -401,6 +402,12 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     </div>
     <div class="chips" id="pickerH"></div>
     <div id="shiftList"></div>
+  </section>
+
+  <!-- ========== UNITS (4.12) — per-unit facts; VINs first. Worker dashUnits = Sheet Units tab + Verizon. ========== -->
+  <section id="vUnits" style="display:none">
+    <div class="sec"><span class="lbl">Units · tap a VIN to copy</span></div>
+    <div id="unitList"></div>
   </section>
 
   <!-- ========== SETTINGS ========== -->
@@ -636,7 +643,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 var API_URL   = "https://script.google.com/macros/s/AKfycbxB9ymqvQWNa86CM0AkSRHRsb0XZ14bHKS98wCw6pCEwDeUmvEPIVAdIvlPeuC39kizkQ/exec";
 var CLIENT_ID = "467184176739-4houlseq386a35ufvc4ed8p96q92pmug.apps.googleusercontent.com";
 var FORCE_LOGIN = false;
-var FE_VERSION  = '4.11';     // 4.11 paints the board from a write's data.init (server 20 v3.19) instead of a forced dashInit; expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
+var FE_VERSION  = '4.12';     // 4.12 Units tab (VINs; Worker dashUnits); 4.11 paints the board from a write's data.init (server 20 v3.19) instead of a forced dashInit; expects server v3.12+ (applicant endpoints); 4.3 consumes detail+lot from Lot writes (25 v1.2); 4.4 reads via the edge; 4.5 optimistic writes; 4.7 auction close-out (server 29 + 20 v3.16)
 /* v4.4: the same-origin edge (Cloudflare Pages Function at /api, KV-backed)
    answers cached reads in tens of ms instead of Apps Script's ~2.6s wake-up.
    Writes pass through it untouched. If the edge is missing, unconfigured or
@@ -723,7 +730,7 @@ function toast(m,bad){
    the fail-safe direction is "don't repeat it". */
 var READ_FNS = { dashInit:1, dashDay:1, dashApplicants:1, dashApplicant:1,
                  dashShifts:1, dashConfigList:1, dashDiag:1,
-                 dashImpounds:1, dashImpound:1 };
+                 dashImpounds:1, dashImpound:1, dashUnits:1 };
 
 function apiFetch(qs,attempt,retryOk){
   var viaEdge = EDGE_ON && Date.now()>EDGE_DOWN_UNTIL;
@@ -966,7 +973,7 @@ function renderFoot(stale){
     ' · <a href="#" onclick="logout();return false">Sign out</a>';
 }
 function showTab(t){
-  var map={today:'tabToday',lot:'tabLot',people:'tabPeople',sched:'tabSched',shifts:'tabShifts',settings:'tabCfg'};
+  var map={today:'tabToday',lot:'tabLot',people:'tabPeople',sched:'tabSched',shifts:'tabShifts',units:'tabUnits',settings:'tabCfg'};
   Object.keys(map).forEach(function(x){
     $(map[x]).className = 'tab'+(x===t?' on':'');
     if(x===t && $(map[x]).querySelector('.dot')) {}
@@ -976,9 +983,11 @@ function showTab(t){
   $('vPeople').style.display   = t==='people'?'':'none';
   $('vSched').style.display    = t==='sched'?'':'none';
   $('vShifts').style.display   = t==='shifts'?'':'none';
+  $('vUnits').style.display    = t==='units'?'':'none';
   $('vSettings').style.display = t==='settings'?'':'none';
   if(t==='lot'      && (!LOT || LOT_STALE)) { LOT_STALE=false; loadLot(!!LOT) }
   if(t==='shifts'   && !SH)  loadShifts();
+  if(t==='units'    && !UNITS) loadUnits();
   if(t==='settings' && !CFG) loadCfg();
   if(t==='settings') tbCoverage();
   if(t==='people'   && APPL===null) loadAppl(false);
@@ -1680,6 +1689,35 @@ function fileExc(){
 /* ==========================================================
    SHIFTS
    ========================================================== */
+/* ---- UNITS (4.12) ---- */
+var UNITS=null;
+function loadUnits(){
+  api('dashUnits',[KEYV()],function(d){ UNITS=d.units||[]; renderUnits() }, false, 'Loading units');
+}
+function copyVin(v,el){
+  var done=function(){ toast('Copied '+v) };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(v).then(done,function(){ selText(el) }) }
+  else selText(el);
+}
+function selText(el){ try{ var r=document.createRange(); r.selectNodeContents(el); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r) }catch(e){} }
+function renderUnits(){
+  var v=$('unitList'); v.innerHTML='';
+  if(!UNITS.length){ v.innerHTML='<div class="empty">No units found.</div>'; return }
+  UNITS.forEach(function(u){
+    var el=document.createElement('div'); el.className='card';
+    var what=[u.year,u.make,u.model].filter(Boolean).join(' ');
+    var TYPES={FB:'Flatbed',WL:'Wheel lift',TT:'Tractor',T:'Trailer',ST:'Service'};
+    var off=/^false$/i.test(u.in_service);
+    if(off) el.style.opacity='.55';
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
+      '<b style="font-size:17px">'+esc(u.unit)+'<span class="sub" style="font-weight:400;margin-left:6px">'+esc(TYPES[u.type]||u.type||'')+(off?' · out of service':'')+'</span></b><span class="sub" style="margin:0">'+esc(what)+(u.plate?' · '+esc(u.plate):'')+'</span></div>'+
+      (u.vin?'<div class="vin" style="font:600 15px/1.3 ui-monospace,Menlo,monospace;letter-spacing:.5px;margin-top:6px;word-break:break-all;cursor:pointer">'+esc(u.vin)+'</div>'
+            :'<div class="sub">No VIN on file</div>')+
+      (u.flags&&u.flags.length?'<div class="sub" style="color:#b45309">'+esc(u.flags.join(' · '))+'</div>':'');
+    var vn=el.querySelector('.vin'); if(vn) vn.onclick=function(){ copyVin(u.vin,vn) };
+    v.appendChild(el);
+  });
+}
 function loadShifts(){
   api('dashShifts',[wkOff,KEYV()],function(s){
     SH=s; if(!selShiftDriver) selShiftDriver=selDriver; renderShifts();

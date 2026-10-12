@@ -38,7 +38,8 @@ export const READ_FNS = {
   dashImpound:    ['lot', 300, false],
   dashAuction:    ['lot', 300, false],
   dashDisposals:  ['lot', 300, false],
-  dashWalk:       ['lot', 300, false]
+  dashWalk:       ['lot', 300, false],
+  dashUnits:      ['config', 600, false]   // Worker-only (D1_FNS); no Apps Script twin
 };
 
 export const GROUPS = ['board', 'appl', 'config', 'lot', 'auth'];
@@ -128,7 +129,7 @@ export async function markTrusted(env, keyHash) {
  * comma list of fns to keep on Apps Script while the parity harness is still
  * out on them. Remove TOWOS_D1_URL and the edge is byte-for-byte the old one.
  */
-export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'dashApplicants', 'dashApplicant', 'dashImpounds', 'dashImpound', 'dashAuction', 'dashDisposals', 'dashWalk'];
+export const D1_FNS = ['dashInit', 'dashDay', 'dashShifts', 'dashConfigList', 'dashApplicants', 'dashApplicant', 'dashImpounds', 'dashImpound', 'dashAuction', 'dashDisposals', 'dashWalk', 'dashUnits'];
 
 /**
  * Phase 2 (2026-10-03): WRITES the Worker accepts. It validates against the mirror, patches D1 so
