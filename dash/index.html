@@ -1346,6 +1346,7 @@ function applCard(a){
       '<span class="dd'+(a.docs.dl?' has':'')+'">licence</span>'+
       '<span class="dd'+(a.docs.med?' has':'')+'">med</span>'+
       '<span class="dd'+(a.docs.policies?' has':'')+'">policies</span>'+
+      '<span class="dd'+(a.docs.sscard?' has':'')+'">SS card</span>'+
       '</div>';
   }
   el.innerHTML=
@@ -1410,8 +1411,12 @@ function applBody(d){
       docBtn(d.docs&&d.docs.dl,'id','Licence',L.expired?'expired':'')+
       docBtn(d.docs&&d.docs.med,'med','Med card',M.expired?'expired':'')+
       docBtn(d.docs&&d.docs.policies,'check','Policies')+
+      docBtn(d.docs&&d.docs.sscard,'id','SS card',(d.docs&&d.docs.sscard)?'':'needed to hire')+
       (d.docs&&d.docs.extra?docBtn(d.docs.extra,'clip','Extra'):'')+
-     '</div></div>';
+     '</div>'+
+     (B&&B.canSettings&&!d.hired?'<label class="btn sec sm" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;cursor:pointer">'+ico('id')+(d.docs&&d.docs.sscard?'Replace SS card photo':'Add SS card photo')+
+       '<input type="file" accept="image/*,.pdf" style="display:none" onchange="uploadSsCard(this)"></label>':'')+
+     '</div>';
 
   /* --- then contact + logistics --- */
   var tel=String(c.phone||'').replace(/[^\d+]/g,'');
@@ -1507,6 +1512,7 @@ function applBody(d){
   });
   h+='</div></div>';
   if(B && B.canSettings){
+    if(d.docs && !d.docs.sscard) h+='<div class="kv" style="margin-bottom:6px"><span class="v muted">Hire needs a Social Security card photo first — add it above, or they can text a photo to (810) 545-4205.</span></div>';
     h+='<button class="btn" onclick="doHire()">Hire '+esc(d.first||d.name)+'</button>';
   }
   return h;
@@ -1546,6 +1552,36 @@ function saveStage(){
     fn:'dashSetApplicantStage', args:[t.id,t.stage,n,KEYV()],
     ok: function(r){ toast(r.from+' → '+r.stage); APPL=null; loadAppl(true) }
   });
+}
+/* 10/26: Social Security card photo (required before hire). Photos are shrunk in the
+   browser (long side 1800 px, JPEG) so the upload stays small; a PDF goes as-is. The
+   Worker holds the bytes for Apps Script to file in Drive; nothing lands in the sheet but
+   the Drive link. */
+function uploadSsCard(inp){
+  var f=inp.files&&inp.files[0]; if(!f||!APDET) return;
+  var id=APDET.id;
+  function send(data,mime,name){
+    spin(true,'Saving SS card');
+    fetch(TB_API+'/files/sscard',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({k:KEYV(),applicantId:id,data:data,mime:mime,name:name})})
+      .then(function(r){ return r.json() }).then(function(j){
+        spin(false);
+        if(!j||!j.ok){ toast((j&&j.error)||'Upload failed',true); return }
+        toast(j.note||'SS card photo saved'); APPL=null; loadAppl(true); openApplicant(id);
+      }).catch(function(e){ spin(false); toast('Upload failed: '+e.message,true) });
+  }
+  if(/pdf/i.test(f.type)){
+    if(f.size>1400000){ toast('That PDF is too big — take a photo instead.',true); return }
+    var rd=new FileReader(); rd.onload=function(){ send(String(rd.result).split(',')[1],'application/pdf',f.name) }; rd.readAsDataURL(f); return;
+  }
+  var url=URL.createObjectURL(f), img=new Image();
+  img.onload=function(){
+    var w=img.naturalWidth,h=img.naturalHeight,m=1800,sc=Math.min(1,m/Math.max(w,h));
+    var c=document.createElement('canvas'); c.width=Math.round(w*sc); c.height=Math.round(h*sc);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+    send(c.toDataURL('image/jpeg',0.85).split(',')[1],'image/jpeg','sscard.jpg');
+  };
+  img.onerror=function(){ toast('Could not read that picture — try a JPG or PNG.',true) };
+  img.src=url;
 }
 function doHire(){
   var d=APDET;
