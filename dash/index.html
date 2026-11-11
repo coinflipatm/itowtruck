@@ -1405,6 +1405,15 @@ function applBody(d){
   var h='';
   var c=d.contact||{}, L=d.license||{}, M=d.medical||{}, S=d.screening||{}, W=d.work||{}, P=d.policy||{}, G=d.logistics||{};
 
+  /* --- hire, at the top (11/11: Fino couldn't find the button at the bottom of a long card) --- */
+  if(B && B.canSettings && !d.hired){
+    h+='<div class="block" style="padding-top:0">'+
+       (d.docs && d.docs.sscard
+         ? '<button class="btn" style="width:100%" onclick="doHire()">Hire '+esc(d.first||d.name)+'</button>'
+         : '<button class="btn" style="width:100%;opacity:.55" onclick="toast(\'Add the Social Security card photo first (below), then hire.\',true)">Hire '+esc(d.first||d.name)+' — needs SS card photo</button>')+
+       '</div>';
+  }
+
   /* --- what Fino decides on: documents first --- */
   h+='<div class="block"><span class="lbl">Documents</span><div class="docgrid">'+
       docBtn(d.docs&&d.docs.app,'doc','Application')+
